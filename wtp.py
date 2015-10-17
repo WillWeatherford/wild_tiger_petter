@@ -106,6 +106,11 @@ def load_rand_tile():
     return load_image(random.choice(get_file_paths(TILES_PATH)))
 
 
+def calc_matrix_pos(matrix_size):
+    return tuple([xy - (TILE_SIZE * (matrix_size / 2)) - TILE_SIZE / 2
+                  for xy in CENTER_FRAME_POS])
+
+
 class ImgObj(pygame.sprite.Sprite):
     def __init__(self, pos=OFFSCREEN, width=0, height=0):
         pygame.sprite.Sprite.__init__(self)
@@ -192,7 +197,7 @@ class Player(ImgObj):
 class TileMatrix(ImgObj):
     def __init__(self, size, *args, **kwargs):
         super(TileMatrix, self).__init__(*args, **kwargs)
-        assert size % 2 != 0 and size >= 5, ('Tile Matrix size must be '
+        assert size % 2 != 0 and size >= 3, ('Tile Matrix size must be '
                                              'an odd number at least 5')
         self.size = int(size)
         self.index_range = range(size)
@@ -210,12 +215,9 @@ class TileMatrix(ImgObj):
             for y in self.index_range])
         return 'Tile Matrix centered at {}\n{}'.format(self.pos, tiles)
 
-    # move this method to the Tile object, since tile object has matrix pos propertiess?
     def rel_tile_pos(self, matrix_pos):
         return tuple(map(
-            lambda xy1, xy2: xy1 + (xy2 * TILE_SIZE) - (TILE_SIZE / 2),
-            self.pos,
-            matrix_pos))
+            lambda xy1, xy2: xy1 + (TILE_SIZE * xy2), self.pos, matrix_pos))
 
     def redraw(self, direction):
         # delete unecessary ones
@@ -263,9 +265,9 @@ class TileMatrix(ImgObj):
         super(TileMatrix, self).move(direction)
         for tile in self.get_matrix():
             tile.move(direction)
-        if self.off_center():
-            print('Tile off center; redrawing.')
-            self.redraw(direction)
+        # if self.off_center():
+        #     print('Tile off center; redrawing.')
+        #     self.redraw(direction)
 
     def draw(self, surface):
         for tile in self.get_matrix():
@@ -274,8 +276,9 @@ class TileMatrix(ImgObj):
 
 class GameState(object):
 
-    def __init__(self):
-        self.tile_matrix = TileMatrix(5, pos=CENTER_FRAME_POS)
+    def __init__(self, matrix_size):
+        self.tile_matrix = TileMatrix(matrix_size,
+                                      pos=calc_matrix_pos(matrix_size))
         self.player = Player(pos=CENTER_FRAME_POS)
         self.direction = None
 
@@ -314,7 +317,7 @@ def main():
 
     # initialize
 
-    game_state = GameState()
+    game_state = GameState(3)
     print(str(game_state))
 
     while True:
