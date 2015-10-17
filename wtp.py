@@ -42,7 +42,7 @@ CENTER_FRAME_POS = (FRAME_WIDTH / 2, FRAME_HEIGHT / 2)
 FRAME = pygame.display.set_mode((FRAME_WIDTH, FRAME_HEIGHT))
 
 TILES_PATH = './tiles'
-TILE_SIZE = 50
+TILE_SIZE = 200
 
 #############################
 
@@ -154,7 +154,7 @@ class ImgObj(pygame.sprite.Sprite):
     @property
     def center(self):
         return self._rect.center
-    
+
     def move(self, direction):
         if not isinstance(direction, tuple) and len(direction) == 2:
             raise TypeError('{} direction must be tuple len 2.'
@@ -166,32 +166,9 @@ class ImgObj(pygame.sprite.Sprite):
 
 
 class Tile(ImgObj):
-    def __init__(self, matrix_pos, *args, **kwargs):
+    def __init__(self, *args, **kwargs):
         super(Tile, self).__init__(*args, **kwargs)
         self.image = load_rand_tile()
-        self.matrix_pos = matrix_pos
-
-    @property
-    def matrix_pos(self):
-        return self.matrix_x, self.matrix_y
-
-    @matrix_pos.setter
-    def matrix_pos(self, matrix_pos):
-        self._matrix_x, self._matrix_y = matrix_pos
-
-    @property
-    def matrix_x(self):
-        return self._matrix_x
-
-    @property
-    def matrix_y(self):
-        return self._matrix_y
-
-    def matrix_move(self, direction):
-        x, y = direction
-        self._matrix_x += x
-        self._matrix_y += y
-        # if outside matrix bounds, delete
 
     def collide(self, pos):
         return self.rect.collidepoint(pos)
@@ -218,27 +195,20 @@ class TileMatrix(ImgObj):
         assert size % 2 != 0 and size >= 5, ('Tile Matrix size must be '
                                              'an odd number at least 5')
         self.size = int(size)
-        self.index_range = range(0 - size / 2, (size / 2) + 1)
-        self.center_index = 0
-        # self.tiles = {matrix_x:
-        #              {matrix_y: Tile((matrix_x, matrix_y),
-        #                              self.rel_tile_pos((matrix_x, matrix_y)),
-        #                              TILE_SIZE,
-        #                              TILE_SIZE)
-        #               for matrix_y in self.index_range}
-        #              for matrix_x in self.index_range}
-        self.tiles = [Tile((matrix_x, matrix_y),
-                           self.rel_tile_pos((matrix_x, matrix_y)),
-                           TILE_SIZE,
-                           TILE_SIZE)
-                      for matrix_x in self.index_range
+        self.index_range = range(size)
+        self.center_index = size / 2
+        self.tiles = [[Tile(self.rel_tile_pos((matrix_x, matrix_y)),
+                            TILE_SIZE,
+                            TILE_SIZE)
+                       for matrix_x in self.index_range]
                       for matrix_y in self.index_range]
         self.center_tile = self.get_center_tile()
 
     def __str__(self):
-        tiles = ''
-        tiles = '\n'.join(list(str(t) for t in self.get_matrix()))
-        return '{}\n{}'.format(self.pos, tiles)
+        tiles = '\n'.join([' '.join([
+            str((x, y)) for x in self.index_range])
+            for y in self.index_range])
+        return 'Tile Matrix centered at {}\n{}'.format(self.pos, tiles)
 
     # move this method to the Tile object, since tile object has matrix pos propertiess?
     def rel_tile_pos(self, matrix_pos):
@@ -278,13 +248,12 @@ class TileMatrix(ImgObj):
                                    TILE_SIZE))
 
     def get_matrix(self):
-        for tile in self.tiles:
+        for col in self.tiles:
+            for tile in col:
                 yield tile
 
     def get_center_tile(self, direction=(0, 0)):
-        tiles = [tile for tile in self.tiles if tile.matrix_pos == direction]
-        assert len(tiles) is 1, ('Incorrect center tiles found: {}').format(len(tiles))
-        return tiles[0]
+        return self.tiles[self.center_index][self.center_index]
 
     def off_center(self):
         return not self.center_tile.collide(CENTER_FRAME_POS)
@@ -312,10 +281,9 @@ class GameState(object):
 
     def __str__(self):
         return '''
-        GameState:
-        \tTileMatrix:
-        \t{tm}
-        '''.format(tm=self.tile_matrix)
+        GameState;
+        {}
+        '''.format(self.tile_matrix)
 
     def move(self):
         if self.direction:
