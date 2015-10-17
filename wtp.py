@@ -42,7 +42,7 @@ CENTER_FRAME_POS = (FRAME_WIDTH / 2, FRAME_HEIGHT / 2)
 FRAME = pygame.display.set_mode((FRAME_WIDTH, FRAME_HEIGHT))
 
 TILES_PATH = './tiles'
-TILE_SIZE = 200
+TILE_SIZE = 50
 
 #############################
 
@@ -151,6 +151,10 @@ class ImgObj(pygame.sprite.Sprite):
     def height(self):
         return self._rect.height
 
+    @property
+    def center(self):
+        return self._rect.center
+    
     def move(self, direction):
         if not isinstance(direction, tuple) and len(direction) == 2:
             raise TypeError('{} direction must be tuple len 2.'
@@ -162,13 +166,34 @@ class ImgObj(pygame.sprite.Sprite):
 
 
 class Tile(ImgObj):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, matrix_pos, *args, **kwargs):
         super(Tile, self).__init__(*args, **kwargs)
         self.image = load_rand_tile()
+        self.matrix_pos = matrix_pos
+
+    @property
+    def matrix_pos(self):
+        return self.matrix_x, self.matrix_y
+
+    @matrix_pos.setter
+    def matrix_pos(self, matrix_pos):
+        self._matrix_x, self._matrix_y = matrix_pos
+
+    @property
+    def matrix_x(self):
+        return self._matrix_x
+
+    @property
+    def matrix_y(self):
+        return self._matrix_y
+
+    def matrix_move(self, direction):
+        x, y = direction
+        self._matrix_x += x
+        self._matrix_y += y
+        # if outside matrix bounds, delete
 
     def collide(self, pos):
-        print('{} colling with center point? {}'
-              ''.format(str(self), self.rect.collidepoint(pos)))
         return self.rect.collidepoint(pos)
 
     def draw(self, surface):
@@ -194,39 +219,75 @@ class TileMatrix(ImgObj):
                                              'an odd number at least 5')
         self.size = int(size)
         self.index_range = range(0 - size / 2, (size / 2) + 1)
-        self.rows = {matrix_x:
-                     {matrix_y: Tile(self.rel_tile_pos((matrix_x, matrix_y)),
-                                     TILE_SIZE,
-                                     TILE_SIZE)
-                      for matrix_y in self.index_range}
-                     for matrix_x in self.index_range}
+        self.center_index = 0
+        # self.tiles = {matrix_x:
+        #              {matrix_y: Tile((matrix_x, matrix_y),
+        #                              self.rel_tile_pos((matrix_x, matrix_y)),
+        #                              TILE_SIZE,
+        #                              TILE_SIZE)
+        #               for matrix_y in self.index_range}
+        #              for matrix_x in self.index_range}
+        self.tiles = [Tile((matrix_x, matrix_y),
+                           self.rel_tile_pos((matrix_x, matrix_y)),
+                           TILE_SIZE,
+                           TILE_SIZE)
+                      for matrix_x in self.index_range
+                      for matrix_y in self.index_range]
+        self.center_tile = self.get_center_tile()
 
     def __str__(self):
         tiles = ''
-        # tiles = '\n'.join(list(str(t) for t in self.get_matrix()))
+        tiles = '\n'.join(list(str(t) for t in self.get_matrix()))
         return '{}\n{}'.format(self.pos, tiles)
 
+    # move this method to the Tile object, since tile object has matrix pos propertiess?
     def rel_tile_pos(self, matrix_pos):
-        # return (TILE_SIZE * self.pos[i] * xy for i, xy enumerate(matrix_pos))
-        # print('{} * {} * {}'.format(matrix_pos, self.pos, TILE_SIZE))
-        x = self.x + (matrix_pos[0] * TILE_SIZE) - (TILE_SIZE / 2)
-        y = self.y + (matrix_pos[1] * TILE_SIZE) - (TILE_SIZE / 2)
-        return (x, y)
+        return tuple(map(
+            lambda xy1, xy2: xy1 + (xy2 * TILE_SIZE) - (TILE_SIZE / 2),
+            self.pos,
+            matrix_pos))
 
     def redraw(self, direction):
-        if direction == UP:
-            print self.self.index_range[-1]
-            for i in self.index_range[:-1]:
-                self.rows[i] = self.rows[i + 1]
+        # delete unecessary ones
+
+        print('Matrix pos before redraw: {}'.format(self.pos))
+
+        # update positions of all tiles!
+        for tile in self.tiles:
+            tile.matrix_move(direction)
+
+        # update position of center tile and  matrix center
+        self.center_tile = self.get_center_tile()
+        self.pos = self.center_tile.center
+
+        print('Matrix pos after redraw: {}'.format(self.pos))
+
+        for n in self.index_range:
+            if direction == DIRECTIONS[LEFT]:
+                matrix_pos = self.index_range[0], n
+            elif direction == DIRECTIONS[RIGHT]:
+                matrix_pos = self.index_range[-1], n
+            elif direction == DIRECTIONS[UP]:
+                matrix_pos = n, self.index_range[0]
+            elif direction == DIRECTIONS[DOWN]:
+                matrix_pos = n, self.index_range[-1]
+
+            self.tiles.append(Tile(matrix_pos,
+                                   self.rel_tile_pos(matrix_pos),
+                                   TILE_SIZE,
+                                   TILE_SIZE))
 
     def get_matrix(self):
-        for row, col in self.rows.items():
-            for pos, tile in col.items():
+        for tile in self.tiles:
                 yield tile
 
+    def get_center_tile(self, direction=(0, 0)):
+        tiles = [tile for tile in self.tiles if tile.matrix_pos == direction]
+        assert len(tiles) is 1, ('Incorrect center tiles found: {}').format(len(tiles))
+        return tiles[0]
+
     def off_center(self):
-        print(str(self.rows[0][0].rect))
-        return not self.rows[0][0].collide(CENTER_FRAME_POS)
+        return not self.center_tile.collide(CENTER_FRAME_POS)
 
     def move(self, direction):
         # note, direction is a tuple (x change, y change)
@@ -234,8 +295,8 @@ class TileMatrix(ImgObj):
         for tile in self.get_matrix():
             tile.move(direction)
         if self.off_center():
-            print('Tile off center.')
-        #     self.redraw(direction)
+            print('Tile off center; redrawing.')
+            self.redraw(direction)
 
     def draw(self, surface):
         for tile in self.get_matrix():
