@@ -172,8 +172,11 @@ class ImgObj(pygame.sprite.Sprite):
 
 class Tile(ImgObj):
     def __init__(self, *args, **kwargs):
-        super(Tile, self).__init__(*args, **kwargs)
+        super(Tile, self).__init__(*args, width=TILE_SIZE, height=TILE_SIZE, **kwargs)
         self.image = load_rand_tile()
+
+    def __str__(self):
+        return 'Tile at {}'.format(self.pos)
 
     def collide(self, pos):
         return self.rect.collidepoint(pos)
@@ -202,56 +205,63 @@ class TileMatrix(ImgObj):
         self.size = int(size)
         self.index_range = range(size)
         self.center_index = size / 2
-        self.tiles = [[Tile(self.rel_tile_pos((matrix_x, matrix_y)),
-                            TILE_SIZE,
-                            TILE_SIZE)
-                       for matrix_x in self.index_range]
-                      for matrix_y in self.index_range]
+        self.tiles = [[Tile(self.rel_tile_pos((matrix_x, matrix_y)))
+                       for matrix_y in self.index_range]
+                      for matrix_x in self.index_range]
         self.center_tile = self.get_center_tile()
 
     def __str__(self):
-        tiles = '\n'.join([' '.join([
-            str((x, y)) for x in self.index_range])
+        tiles = '\n'.join([' | '.join(
+            ['({}, {}): {}'.format(x, y, str(self.tiles[x][y]))
+             for x in self.index_range])
             for y in self.index_range])
         return 'Tile Matrix centered at {}\n{}'.format(self.pos, tiles)
 
-    def rel_tile_pos(self, matrix_pos):
+    def rel_tile_pos(self, matrix_pos, direction=(0, 0)):
+        result = tuple(map(
+            lambda xy1, xy2, xy3: xy1 + (TILE_SIZE * xy2) + (TILE_SIZE * xy3),
+            self.pos, matrix_pos, direction))
+        print('Matrix pos {} --> frame pos {}'.format(matrix_pos, result))
         return tuple(map(
-            lambda xy1, xy2: xy1 + (TILE_SIZE * xy2), self.pos, matrix_pos))
+            lambda xy1, xy2, xy3: xy1 + (TILE_SIZE * xy2) + (TILE_SIZE * xy3),
+            self.pos, matrix_pos, direction))
 
     def redraw(self, direction):
-        # delete unecessary ones
+        '''
+        Repositions all Tiles in the matrix when the center tile moves off of
+        the center point where the player is.
+        Overwrites tiles on the trailing edge. Creates new tiles on the leading
+        edge.
+        '''
+        print('Matrix pos before redraw: {}'.format(self))
 
-        print('Matrix pos before redraw: {}'.format(self.pos))
+        # dx and dy track the individual x and y movement vectors
+        dx, dy = direction
+        # remember directions are reversed compared to arrow direction
+        print('Direction: {}'.format(direction))
 
-        # update positions of all tiles!
-        for tile in self.tiles:
-            tile.matrix_move(direction)
+        x_range = self.index_range[::-dx or -dy]
+        y_range = self.index_range[::-dy or -dx]
+        for x in x_range:
+            for y in y_range:
+                print('Tile at ({}, {}) moves to ({}, {})'.format(
+                    x, y, x + dx, y + dy))
+                if x + dx >= 0 and y + dy >= 0:
+                    try:
+                        self.tiles[x + dx][y + dy] = self.tiles[x][y]
+                    except IndexError:
+                        print('Index error raised; need to ignore and insert '
+                              'at end of row/column')
+                if (dx and x == x_range[-1]) or (dy and y == y_range[-1]):
+                    self.tiles[x][y] = Tile(self.rel_tile_pos((x - dx, y - dy)))
 
-        # update position of center tile and  matrix center
         self.center_tile = self.get_center_tile()
-        self.pos = self.center_tile.center
-
-        print('Matrix pos after redraw: {}'.format(self.pos))
-
-        for n in self.index_range:
-            if direction == DIRECTIONS[LEFT]:
-                matrix_pos = self.index_range[0], n
-            elif direction == DIRECTIONS[RIGHT]:
-                matrix_pos = self.index_range[-1], n
-            elif direction == DIRECTIONS[UP]:
-                matrix_pos = n, self.index_range[0]
-            elif direction == DIRECTIONS[DOWN]:
-                matrix_pos = n, self.index_range[-1]
-
-            self.tiles.append(Tile(matrix_pos,
-                                   self.rel_tile_pos(matrix_pos),
-                                   TILE_SIZE,
-                                   TILE_SIZE))
+        self.pos = self.tiles[0][0].pos
+        print('Matrix pos after redraw: {}'.format(self))
 
     def get_matrix(self):
-        for col in self.tiles:
-            for tile in col:
+        for row in self.tiles:
+            for tile in row:
                 yield tile
 
     def get_center_tile(self, direction=(0, 0)):
@@ -265,9 +275,9 @@ class TileMatrix(ImgObj):
         super(TileMatrix, self).move(direction)
         for tile in self.get_matrix():
             tile.move(direction)
-        # if self.off_center():
-        #     print('Tile off center; redrawing.')
-        #     self.redraw(direction)
+        if self.off_center():
+            print('Tile off center; redrawing.')
+            self.redraw(direction)
 
     def draw(self, surface):
         for tile in self.get_matrix():
@@ -317,7 +327,7 @@ def main():
 
     # initialize
 
-    game_state = GameState(3)
+    game_state = GameState(5)
     print(str(game_state))
 
     while True:
