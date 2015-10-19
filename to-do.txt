@@ -1,0 +1,5 @@
+create tiger objects
+    place tiger objects on board when adding tiles
+    collide center with tiger sprite
+
+
