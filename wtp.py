@@ -119,7 +119,8 @@ def get_tiger_sprite():
     rect = (0, 0, TIGER_W, TIGER_H)
     filename = os.path.join(SPRITES_PATH, TIGER_SPRITES_FILENAME)
     image = load_image(filename)
-    return image.subsurface(rect)
+    subsurface = image.subsurface(rect)
+    return pygame.transform.rotate(subsurface, random.choice(DEGREES))
 
 
 class ImgObj(pygame.sprite.Sprite):
@@ -210,6 +211,7 @@ class Tiger(ImgObj):
                                     **kwargs)
         self.pic = pic
         self.image = get_tiger_sprite()
+        self.image.set_colorkey(WHITE)
 
 
 class Player(ImgObj):
