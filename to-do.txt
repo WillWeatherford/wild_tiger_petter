@@ -3,7 +3,8 @@ movement keys are sticky, need to fix
 
 place tiger objects on board when adding tiles
 don't spawn on center tile
-initiate next state when collide center with tiger sprite
+distribute evenly? one tiger per tile?
+once petting has completed with tiger, remove it from the board
 
 
 
