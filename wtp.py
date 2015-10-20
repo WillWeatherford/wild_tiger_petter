@@ -42,7 +42,13 @@ CENTER_FRAME_POS = (FRAME_WIDTH / 2, FRAME_HEIGHT / 2)
 FRAME = pygame.display.set_mode((FRAME_WIDTH, FRAME_HEIGHT))
 
 TILES_PATH = './tiles'
+SPRITES_PATH = './sprites'
+TIGER_PICS_PATH = './tiger_pics'
+TIGER_SPRITES_FILENAME = 'tiger_sprites.png'
 TILE_SIZE = 200
+DEGREES = [0, 90, 180, 270]
+
+TIGER_W, TIGER_H = 19, 51
 
 #############################
 
@@ -91,6 +97,7 @@ class Text(object):
         surface.blit(self.surface_obj, self.rect)
 
 ################################################
+# Image loading tools
 
 
 def get_file_paths(root):
@@ -102,13 +109,17 @@ def load_image(filename):
 
 
 def load_rand_tile():
-    # random rotation also
-    return load_image(random.choice(get_file_paths(TILES_PATH)))
+    filename = random.choice(get_file_paths(TILES_PATH))
+    tile = load_image(filename)
+    return pygame.transform.rotate(tile, random.choice(DEGREES))
 
 
-def calc_matrix_pos(matrix_size):
-    return tuple([xy - (TILE_SIZE * (matrix_size / 2)) - TILE_SIZE / 2
-                  for xy in CENTER_FRAME_POS])
+# will need to convert this into a general sprite getting function
+def get_tiger_sprite():
+    rect = (0, 0, TIGER_W, TIGER_H)
+    filename = os.path.join(SPRITES_PATH, TIGER_SPRITES_FILENAME)
+    image = load_image(filename)
+    return image.subsurface(rect)
 
 
 class ImgObj(pygame.sprite.Sprite):
@@ -118,7 +129,10 @@ class ImgObj(pygame.sprite.Sprite):
         self.rect = pygame.Rect(self.x, self.y, width, height)
 
     def __str__(self):
-        return '{} at {}; w: {}, h: {}'.format(repr(self), self.pos, self.width, self.height)
+        return '{} at {}; w: {}, h: {}'.format(self.__class__.__name__,
+                                               self.pos,
+                                               self.width,
+                                               self.height)
 
     @property
     def pos(self):
@@ -169,15 +183,6 @@ class ImgObj(pygame.sprite.Sprite):
         self._y += y
         self._rect.move_ip(x, y)
 
-
-class Tile(ImgObj):
-    def __init__(self, *args, **kwargs):
-        super(Tile, self).__init__(*args, width=TILE_SIZE, height=TILE_SIZE, **kwargs)
-        self.image = load_rand_tile()
-
-    def __str__(self):
-        return 'Tile at {}'.format(self.pos)
-
     def collide(self, pos):
         return self.rect.collidepoint(pos)
 
@@ -185,8 +190,26 @@ class Tile(ImgObj):
         surface.blit(self.image, self.pos)
 
 
+class Tile(ImgObj):
+    def __init__(self, *args, **kwargs):
+        super(Tile, self).__init__(*args,
+                                   width=TILE_SIZE,
+                                   height=TILE_SIZE,
+                                   **kwargs)
+        self.image = load_rand_tile()
+
+    def __str__(self):
+        return 'Tile at {}'.format(self.pos)
+
+
 class Tiger(ImgObj):
-    pass
+    def __init__(self, pic, *args, **kwargs):
+        super(Tiger, self).__init__(*args,
+                                    width=TIGER_W,
+                                    height=TIGER_H,
+                                    **kwargs)
+        self.pic = pic
+        self.image = get_tiger_sprite()
 
 
 class Player(ImgObj):
@@ -199,12 +222,16 @@ class Player(ImgObj):
 
 class TileMatrix(ImgObj):
     def __init__(self, size, *args, **kwargs):
-        super(TileMatrix, self).__init__(*args, **kwargs)
+        super(TileMatrix, self).__init__(*args,
+                                         width=TILE_SIZE * size,
+                                         height=TILE_SIZE * size,
+                                         **kwargs)
         assert size % 2 != 0 and size >= 3, ('Tile Matrix size must be '
                                              'an odd number at least 5')
         self.size = int(size)
         self.index_range = range(size)
         self.center_index = size / 2
+        self.init_matrix_pos(size)
         self.tiles = [[Tile(self.rel_tile_pos((matrix_x, matrix_y)))
                        for matrix_y in self.index_range]
                       for matrix_x in self.index_range]
@@ -217,11 +244,11 @@ class TileMatrix(ImgObj):
             for y in self.index_range])
         return 'Tile Matrix centered at {}\n{}'.format(self.pos, tiles)
 
+    def init_matrix_pos(self, matrix_size):
+        return tuple([xy - (TILE_SIZE * (matrix_size / 2)) - TILE_SIZE / 2
+                      for xy in CENTER_FRAME_POS])
+
     def rel_tile_pos(self, matrix_pos, direction=(0, 0)):
-        result = tuple(map(
-            lambda xy1, xy2, xy3: xy1 + (TILE_SIZE * xy2) + (TILE_SIZE * xy3),
-            self.pos, matrix_pos, direction))
-        print('Matrix pos {} --> frame pos {}'.format(matrix_pos, result))
         return tuple(map(
             lambda xy1, xy2, xy3: xy1 + (TILE_SIZE * xy2) + (TILE_SIZE * xy3),
             self.pos, matrix_pos, direction))
@@ -237,7 +264,7 @@ class TileMatrix(ImgObj):
 
         # dx and dy track the individual x and y movement vectors
         dx, dy = direction
-        # remember directions are reversed compared to arrow direction
+        # remember: directions are reversed compared to arrow direction
         print('Direction: {}'.format(direction))
 
         x_range = self.index_range[::-dx or -dy]
@@ -273,6 +300,7 @@ class TileMatrix(ImgObj):
     def move(self, direction):
         # note, direction is a tuple (x change, y change)
         super(TileMatrix, self).move(direction)
+        self.rect.move_ip(direction)
         for tile in self.get_matrix():
             tile.move(direction)
         if self.off_center():
@@ -285,10 +313,14 @@ class TileMatrix(ImgObj):
 
 
 class GameState(object):
+    '''
+    Master game state, containing current player action, tile map, game
+    objects on map.
+    '''
 
     def __init__(self, matrix_size):
-        self.tile_matrix = TileMatrix(matrix_size,
-                                      pos=calc_matrix_pos(matrix_size))
+        self.tile_matrix = TileMatrix(matrix_size)
+        self.tigers = self.init_tigers()
         self.player = Player(pos=CENTER_FRAME_POS)
         self.direction = None
 
@@ -298,23 +330,32 @@ class GameState(object):
         {}
         '''.format(self.tile_matrix)
 
+    def init_tigers(self):
+        tiger_pics = [load_image(pic) for pic in get_file_paths(TIGER_PICS_PATH)]
+        return [Tiger(pic, pos=self.random_pos()) for pic in tiger_pics]
+
+    def random_pos(self):
+        return tuple(random.randrange(d) for d in self.tile_matrix.rect.size)
+
     def move(self):
         if self.direction:
             self.tile_matrix.move(self.direction)
-            # move tigers
+            for tiger in self.tigers:
+                tiger.move(self.direction)
 
     def draw(self, surface):
         self.tile_matrix.draw(surface)
-        # draw tigers
+        for tiger in self.tigers:
+            tiger.draw(surface)
         self.player.draw(surface)
 
     def process_event(self, event):
+        if event.type == pgl.KEYUP and event.key in DIRECTIONS.keys():
+            self.direction = None
         if event.type == pgl.KEYDOWN:
             if event.key == pgl.K_ESCAPE:
                 self.quit()
             self.direction = DIRECTIONS.get(event.key, None)
-        if event.type == pgl.KEYUP and event.key in DIRECTIONS.keys():
-            self.direction = None
         if event.type == pgl.QUIT:
             self.quit()
 
