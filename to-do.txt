@@ -3,8 +3,7 @@ movement keys are sticky, need to fix
 
 place tiger objects on board when adding tiles
 don't spawn on center tile
-distribute evenly? one tiger per tile?
-once petting has completed with tiger, remove it from the board
+distribute evenly, one tiger per tile
+fix proper rotation of tiger rect on map for collision
 
-
-
+figure out where to attach methods for determining initial start positions of stuff
