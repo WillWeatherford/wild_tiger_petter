@@ -138,6 +138,14 @@ def distance(pos1, pos2):
     return math.hypot(x_delt, y_delt)
 
 
+def total_distance(pos_list, total=0):
+    if len(pos_list) < 2:
+        return total
+    else:
+        total += distance(pos_list[0], pos_list[1])
+        return total_distance(pos_list[1:], total)
+
+
 class ImgObj(pygame.sprite.Sprite):
     def __init__(self, pos=OFFSCREEN, image=None, width=0, height=0):
         pygame.sprite.Sprite.__init__(self)
