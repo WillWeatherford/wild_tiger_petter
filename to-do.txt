@@ -1,9 +1,15 @@
 
 movement keys are sticky, need to fix
+use list of movement keys instead of booleans
 
-place tiger objects on board when adding tiles
-don't spawn on center tile
-distribute evenly, one tiger per tile
-fix proper rotation of tiger rect on map for collision
+Tigers on Map
+    place tiger objects on board when adding tiles
+    don't spawn on center tile
+    distribute evenly, one tiger per tile
+
+Tiger Petting
+    center picture in frame
+    scale to frame
+    set petting boxes for each tiger individually
 
 figure out where to attach methods for determining initial start positions of stuff

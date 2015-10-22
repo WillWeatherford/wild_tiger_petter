@@ -1,5 +1,6 @@
 import os
 import sys
+import math
 import pygame
 import random
 pygame.init()
@@ -120,10 +121,10 @@ def load_rand_tile():
 
 # will need to convert this into a general sprite getting function
 def get_tiger_sprite():
-    rect = (0, 0, TIGER_W, TIGER_H)
     filename = os.path.join(SPRITES_PATH, TIGER_SPRITES_FILENAME)
     image = load_image(filename)
-    subsurface = image.subsurface(rect)
+    image.set_colorkey(WHITE)
+    subsurface = image.subsurface((0, 0, TIGER_W, TIGER_H))
     return pygame.transform.rotate(subsurface, random.choice(DEGREES))
 
 
@@ -132,11 +133,20 @@ def init_matrix_pos(matrix_size):
                   for xy in CENTER_FRAME_POS])
 
 
+def distance(pos1, pos2):
+    x_delt, y_delt = map(lambda xy1, xy2: abs(xy1 - xy2), pos1, pos2)
+    return math.hypot(x_delt, y_delt)
+
+
 class ImgObj(pygame.sprite.Sprite):
-    def __init__(self, pos=OFFSCREEN, width=0, height=0):
+    def __init__(self, pos=OFFSCREEN, image=None, width=0, height=0):
         pygame.sprite.Sprite.__init__(self)
+        self.image = image
+        if image:
+            self.rect = self.image.get_rect()
+        else:
+            self.rect = pygame.Rect(pos, (width, height))
         self.pos = pos
-        self.rect = pygame.Rect(self.x, self.y, width, height)
 
     def __str__(self):
         return '{} at {}; w: {}, h: {}'.format(self.__class__.__name__,
@@ -153,6 +163,7 @@ class ImgObj(pygame.sprite.Sprite):
         if not isinstance(pos, tuple) and len(pos) == 2:
             raise TypeError('{} pos must be tuple len 2.'.format(repr(self)))
         self._x, self._y = pos
+        self.rect.topleft = pos
 
     @property
     def x(self):
@@ -171,6 +182,8 @@ class ImgObj(pygame.sprite.Sprite):
         self._rect = rect
         self._width = rect.width
         self._height = rect.height
+        self._center = rect.center
+        self.pos = rect.topleft
 
     @property
     def width(self):
@@ -203,10 +216,10 @@ class ImgObj(pygame.sprite.Sprite):
 class Tile(ImgObj):
     def __init__(self, *args, **kwargs):
         super(Tile, self).__init__(*args,
+                                   image=load_rand_tile(),
                                    width=TILE_SIZE,
                                    height=TILE_SIZE,
                                    **kwargs)
-        self.image = load_rand_tile()
 
     def __str__(self):
         return 'Tile at {}'.format(self.pos)
@@ -215,12 +228,13 @@ class Tile(ImgObj):
 class Tiger(ImgObj):
     def __init__(self, picture, *args, **kwargs):
         super(Tiger, self).__init__(*args,
+                                    image=get_tiger_sprite(),
                                     width=TIGER_W,
                                     height=TIGER_H,
                                     **kwargs)
         self.picture = picture
-        self.image = get_tiger_sprite()
-        self.image.set_colorkey(WHITE)
+        self.picture_rect = picture.get_rect()
+        self.picture_rect.center = CENTER_FRAME_POS
         self.petted = False
 
     # need better position to draw picture
@@ -251,7 +265,7 @@ class TileMatrix(ImgObj):
         self.tiles = [[Tile(self.rel_tile_pos((matrix_x, matrix_y)))
                        for matrix_y in self.index_range]
                       for matrix_x in self.index_range]
-        self.center_tile = self.get_center_tile()
+        self.update_pos()
 
     def __str__(self):
         tiles = '\n'.join([' | '.join(
@@ -276,14 +290,13 @@ class TileMatrix(ImgObj):
 
         # dx and dy track the individual x and y movement vectors
         dx, dy = direction
-        # remember: directions are reversed compared to arrow direction
+        # remember: direction of map movement is reversed compared to
+        # arrow direction (player direction)
 
         x_range = self.index_range[::-dx or -dy]
         y_range = self.index_range[::-dy or -dx]
         for x in x_range:
             for y in y_range:
-                # print('Tile at ({}, {}) moves to ({}, {})'.format(
-                #     x, y, x + dx, y + dy))
                 if x + dx >= 0 and y + dy >= 0:
                     try:
                         self.tiles[x + dx][y + dy] = self.tiles[x][y]
@@ -294,18 +307,17 @@ class TileMatrix(ImgObj):
                         #       'at end of row/column')
                 if (dx and x == x_range[-1]) or (dy and y == y_range[-1]):
                     self.tiles[x][y] = Tile(self.rel_tile_pos((x - dx, y - dy)))
-
-        self.center_tile = self.get_center_tile()
-        self.pos = self.tiles[0][0].pos
-        # print('Matrix pos after redraw: {}'.format(self))
+        self.update_pos()
 
     def get_matrix(self):
         for row in self.tiles:
             for tile in row:
                 yield tile
 
-    def get_center_tile(self, direction=(0, 0)):
-        return self.tiles[self.center_index][self.center_index]
+    def update_pos(self, direction=(0, 0)):
+        # use direction
+        self.center_tile = self.tiles[self.center_index][self.center_index]
+        self.pos = self.tiles[0][0].pos
 
     def off_center(self):
         # print('In off_center(): CENTER_FRAME_POS = {}'.format(CENTER_FRAME_POS))
@@ -326,6 +338,11 @@ class TileMatrix(ImgObj):
             tile.draw(surface)
 
 
+class PetHandler(object):
+    def __init__(self, tiger):
+        pass
+
+
 class GameState(object):
     '''
     Master game state, containing current player action, tile map, game
@@ -338,9 +355,9 @@ class GameState(object):
         self.tigers = self.init_tigers()
         print self.tigers_to_pet()
         self.player = Player(pos=CENTER_FRAME_POS)
-        self.mode = WALKING
-        self.direction = None
-        self.tiger_to_pet = None
+        self.start_walking()
+        self.old_pos = None
+        self.mousedown = False
 
     def __str__(self):
         return '''
@@ -359,43 +376,55 @@ class GameState(object):
         return [tiger for tiger in self.tigers if not tiger.petted]
 
     def start_petting(self, tiger):
-        print 'start_petting'
-        self.direction = None
+        print('start_petting')
         self.mode = PETTING
         self.tiger_to_pet = tiger
 
-    def process_pet(self, event):
-        print('pet registered')
+    def start_walking(self):
         self.mode = WALKING
-        self.tiger_to_pet.petted = True
-        self.tiger_to_pet.pos = OFFSCREEN
-        # del self.tiger_to_pet
+        self.direction = None
         self.tiger_to_pet = None
 
+    def process_pet(self):
+        pet_distance = 0
+        if self.mousedown:
+            new_pos = pygame.mouse.get_pos()
+            if self.old_pos:
+                pet_distance = distance(self.old_pos, new_pos)
+            self.pet_pos = new_pos
+            print('Pet distance: {}'.format(pet_distance))
+            self.tiger_to_pet.petted = True
+            self.tiger_to_pet.pos = OFFSCREEN
+            self.start_walking()
+
     def process_event(self, event):
-        if event.type == pgl.QUIT:
+        keyup, keydown = None, None
+        if event.type == pgl.KEYUP:
+            keyup = event.key or None
+        elif event.type == pgl.KEYDOWN:
+            keydown = event.key or None
+        if event.type == pgl.QUIT or keydown == pgl.K_ESCAPE:
             self.quit()
 
         if self.mode == WALKING:
-            if event.type == pgl.KEYUP and event.key in DIRECTIONS.keys():
+            if keydown:
+                self.direction = DIRECTIONS.get(keydown, None)
+            if keyup and self.direction in DIRECTIONS.values():
                 self.direction = None
-            if event.type == pgl.KEYDOWN:
-                if event.key == pgl.K_ESCAPE:
-                    self.quit()
-                self.direction = DIRECTIONS.get(event.key, None)
         elif self.mode == PETTING:
             if event.type == pgl.MOUSEBUTTONDOWN:
-                self.process_pet(event)
+                self.mousedown = True
+            elif event.type == pgl.MOUSEBUTTONUP:
+                self.mousedown = False
 
-    def move(self):
-        if self.mode == WALKING and self.direction:
-            direction = tuple(self.direction)
-            self.tile_matrix.move(direction)
-            # print([str(t) for t in self.tigers])
-            for tiger in self.tigers_to_pet():
-                tiger.move(direction)
-                if tiger.collide(CENTER_FRAME_POS):
-                    self.start_petting(tiger)
+    def move(self, direction):
+        self.tile_matrix.move(direction)
+        # print([str(t) for t in self.tigers])
+        for tiger in self.tigers_to_pet():
+            tiger.move(direction)
+            # should check if collide with player, not center pos
+            if tiger.collide(CENTER_FRAME_POS):
+                self.start_petting(tiger)
 
     def draw(self, surface):
         if self.mode == WALKING:
@@ -407,7 +436,10 @@ class GameState(object):
             self.tiger_to_pet.draw_picture(surface)
 
     def update(self):
-        pass
+        if self.mode == WALKING and self.direction:
+            self.move(self.direction)
+        if self.mode == PETTING:
+            self.process_pet()
         # put useful stuff here to switch between modes
 
     def quit(self):
@@ -427,7 +459,7 @@ def main():
         events = pygame.event.get()
         if events:
             game_state.process_event(events[0])
-        game_state.move()
+        game_state.update()
         game_state.draw(FRAME)
         pygame.display.update()
         fps_clock.tick(FPS)
