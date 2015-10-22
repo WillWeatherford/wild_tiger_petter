@@ -146,6 +146,10 @@ def total_distance(pos_list, total=0):
         return total_distance(pos_list[1:], total)
 
 
+def avg_distance(pos_list):
+    return total_distance(pos_list) / len(pos_list)
+
+
 class ImgObj(pygame.sprite.Sprite):
     def __init__(self, pos=OFFSCREEN, image=None, width=0, height=0):
         pygame.sprite.Sprite.__init__(self)
