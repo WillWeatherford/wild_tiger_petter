@@ -138,6 +138,12 @@ def distance(pos1, pos2):
     return math.hypot(x_delt, y_delt)
 
 
+def distances(pos_list):
+    if len(pos_list) < 2:
+        return []
+    return [distance(pos, pos_list[i - 1]) for i, pos in enumerate(pos_list[1:])]
+
+
 def total_distance(pos_list, total=0):
     if len(pos_list) < 2:
         return total
@@ -364,10 +370,13 @@ class Tiger(ImgObj):
 
     def process_pet(self, mousedown):
         if mousedown:
-            self.pets.append(pygame.mouse.get_pos())
-            self.pet_score += avg_distance(self.pets[:40])
-            print('Pet distance: {}'.format(self.pet_score))
-        if self.pet_score > 400:
+            self.pets.insert(0, pygame.mouse.get_pos())
+            pet_speed = avg_distance(self.pets[:40])
+            self.pet_score += pet_speed
+            print('Pet speed: {:.2f}; Pet distance: {:.2f}'.format(pet_speed, self.pet_score))
+        else:
+            self.pets = []
+        if self.pet_score > 4000:
             self.petted = True
             self.pos = OFFSCREEN
             return True
