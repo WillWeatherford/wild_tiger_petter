@@ -237,23 +237,6 @@ class Tile(ImgObj):
         return 'Tile at {}'.format(self.pos)
 
 
-class Tiger(ImgObj):
-    def __init__(self, picture, *args, **kwargs):
-        super(Tiger, self).__init__(*args,
-                                    image=get_tiger_sprite(),
-                                    width=TIGER_W,
-                                    height=TIGER_H,
-                                    **kwargs)
-        self.picture = picture
-        self.picture_rect = picture.get_rect()
-        self.picture_rect.center = CENTER_FRAME_POS
-        self.petted = False
-
-    # need better position to draw picture
-    def draw_picture(self, surface):
-        surface.blit(self.picture, (0, 0))
-
-
 class Player(ImgObj):
     def __init__(self, *args, **kwargs):
         super(Player, self).__init__(*args, **kwargs)
@@ -361,6 +344,36 @@ class TigerHandler(object):
         pass
 
 
+class Tiger(ImgObj):
+    def __init__(self, picture, *args, **kwargs):
+        super(Tiger, self).__init__(*args,
+                                    image=get_tiger_sprite(),
+                                    width=TIGER_W,
+                                    height=TIGER_H,
+                                    **kwargs)
+        self.picture = picture
+        self.picture_rect = picture.get_rect()
+        self.picture_rect.center = CENTER_FRAME_POS
+        self.petted = False
+        self.pets = []
+        self.pet_score = 0
+
+    # need better position to draw picture
+    def draw_picture(self, surface):
+        surface.blit(self.picture, self.rect.topleft)
+
+    def process_pet(self, mousedown):
+        if mousedown:
+            self.pets.append(pygame.mouse.get_pos())
+            self.pet_score += avg_distance(self.pets[:40])
+            print('Pet distance: {}'.format(self.pet_score))
+        if self.pet_score > 400:
+            self.petted = True
+            self.pos = OFFSCREEN
+            return True
+        return False
+
+
 # move petting to tiger object
 class GameState(object):
     '''
@@ -375,10 +388,6 @@ class GameState(object):
         print self.tigers_to_pet()
         self.player = Player(pos=CENTER_FRAME_POS)
         self.start_walking()
-        self.old_pos = None
-        self.mousedown = False
-        self.pets = []
-        self.petting_total = 0
 
     def __str__(self):
         return '''
@@ -386,37 +395,28 @@ class GameState(object):
         {}
         '''.format(self.tile_matrix)
 
+    def random_pos(self):
+        return tuple(random.randrange(d) for d in self.tile_matrix.rect.size)
+
     def init_tigers(self):
         tiger_pics = [load_image(pic) for pic in get_file_paths(TIGER_PICS_PATH)]
         return [Tiger(pic, pos=self.random_pos()) for pic in tiger_pics]
-
-    def random_pos(self):
-        return tuple(random.randrange(d) for d in self.tile_matrix.rect.size)
 
     def tigers_to_pet(self):
         return [tiger for tiger in self.tigers if not tiger.petted]
 
     def start_petting(self, tiger):
         print('start_petting')
-        self.pets = []
-        self.petting_total = 0
         self.mode = PETTING
         self.tiger_to_pet = tiger
+        self.direction = None
+        self.mousedown = False
 
     def start_walking(self):
         self.mode = WALKING
         self.direction = None
         self.tiger_to_pet = None
-
-    def process_pet(self):
-        if self.mousedown:
-            self.pets.append(pygame.mouse.get_pos())
-            self.petting_total += avg_distance(self.pets[:40])
-            print('Pet distance: {}'.format(self.petting_total))
-        if self.petting_total > 4000:
-            self.tiger_to_pet.petted = True
-            self.tiger_to_pet.pos = OFFSCREEN
-            self.start_walking()
+        self.mousedown = False
 
     def process_event(self, event):
         keyup, keydown = None, None
@@ -440,7 +440,6 @@ class GameState(object):
 
     def move(self, direction):
         self.tile_matrix.move(direction)
-        # print([str(t) for t in self.tigers])
         for tiger in self.tigers_to_pet():
             tiger.move(direction)
             # should check if collide with player, not center pos
@@ -459,8 +458,9 @@ class GameState(object):
     def update(self):
         if self.mode == WALKING and self.direction:
             self.move(self.direction)
-        if self.mode == PETTING:
-            self.process_pet()
+        if self.mode == PETTING and self.tiger_to_pet:
+            if self.tiger_to_pet.process_pet(self.mousedown):
+                self.start_walking()
         # put useful stuff here to switch between modes
 
     def quit(self):
