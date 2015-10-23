@@ -11,5 +11,7 @@ Tiger Petting
     center picture in frame
     scale to frame
     set petting boxes for each tiger individually
+    move petting program to tiger object
+    remove a 'pet' from list every frame... or add a zero distance
 
 figure out where to attach methods for determining initial start positions of stuff

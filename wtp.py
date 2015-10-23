@@ -350,11 +350,18 @@ class TileMatrix(ImgObj):
             tile.draw(surface)
 
 
-class PetHandler(object):
+class TigerHandler(object):
     def __init__(self, tiger):
         pass
 
+    def __iter__(self):
+        return self
 
+    def __next__(self):
+        pass
+
+
+# move petting to tiger object
 class GameState(object):
     '''
     Master game state, containing current player action, tile map, game
@@ -370,6 +377,8 @@ class GameState(object):
         self.start_walking()
         self.old_pos = None
         self.mousedown = False
+        self.pets = []
+        self.petting_total = 0
 
     def __str__(self):
         return '''
@@ -389,6 +398,8 @@ class GameState(object):
 
     def start_petting(self, tiger):
         print('start_petting')
+        self.pets = []
+        self.petting_total = 0
         self.mode = PETTING
         self.tiger_to_pet = tiger
 
@@ -398,13 +409,11 @@ class GameState(object):
         self.tiger_to_pet = None
 
     def process_pet(self):
-        pet_distance = 0
         if self.mousedown:
-            new_pos = pygame.mouse.get_pos()
-            if self.old_pos:
-                pet_distance = distance(self.old_pos, new_pos)
-            self.pet_pos = new_pos
-            print('Pet distance: {}'.format(pet_distance))
+            self.pets.append(pygame.mouse.get_pos())
+            self.petting_total += avg_distance(self.pets[:40])
+            print('Pet distance: {}'.format(self.petting_total))
+        if self.petting_total > 4000:
             self.tiger_to_pet.petted = True
             self.tiger_to_pet.pos = OFFSCREEN
             self.start_walking()
