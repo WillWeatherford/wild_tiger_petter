@@ -55,6 +55,14 @@ DEGREES = [0, 90, 180, 270]
 
 TIGER_W, TIGER_H = 19, 51
 
+MIN_PET_SPEED, MAX_PET_SPEED = 5, 10
+TOO_FAST_MOD, TOO_SLOW_MOD = 1.4, 1.4
+PETTING_TIME = FPS * 10
+
+YAWN = 'YAAAWWWNNN...'
+PURR = 'PUUURRRRRRRRR'
+GRRR = 'GRRRRRRRRRRR!'
+
 #############################
 
 
@@ -363,20 +371,30 @@ class Tiger(ImgObj):
         self.petted = False
         self.pets = []
         self.pet_score = 0
+        self.desired_pet_speed = random.randrange(MIN_PET_SPEED, MAX_PET_SPEED)
+        self.too_fast = self.desired_pet_speed * TOO_FAST_MOD
+        self.too_slow = self.desired_pet_speed / TOO_SLOW_MOD
+        self.petting_time = PETTING_TIME
 
-    # need better position to draw picture
+    # need better position to draw picture to center on screen
     def draw_picture(self, surface):
         surface.blit(self.picture, self.rect.topleft)
 
     def process_pet(self, mousedown):
+        self.petting_time -= 1
+        if len(self.pets) > 40:
+            self.pets.pop()
         if mousedown:
             self.pets.insert(0, pygame.mouse.get_pos())
-            pet_speed = avg_distance(self.pets[:40])
-            self.pet_score += pet_speed
-            print('Pet speed: {:.2f}; Pet distance: {:.2f}'.format(pet_speed, self.pet_score))
+            pet_speed = avg_distance(self.pets)
+            if self.too_slow <= pet_speed < self.too_fast:
+                # make score higher closer to desired speed
+                self.pet_score += 1
+            print('Pet speed: {:.2f} vs {:.2f}; Pet score: {:.2f}'.format(
+                  pet_speed, self.desired_pet_speed, self.pet_score))
         else:
             self.pets = []
-        if self.pet_score > 4000:
+        if self.petting_time <= 0:
             self.petted = True
             self.pos = OFFSCREEN
             return True
