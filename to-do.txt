@@ -4,9 +4,7 @@ use list of movement keys instead of booleans
 animated player sprite
 
 Tigers on Map
-    place tiger objects on board when adding tiles
     don't spawn on center tile
-    distribute evenly, one tiger per tile
     move tigers when tiles are deleted/added
     populate "ROAR" text messages on map for off-screen tigers
 

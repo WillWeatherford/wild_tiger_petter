@@ -173,7 +173,8 @@ def avg_distance(pos_list):
 
 
 class ImgObj(pygame.sprite.Sprite):
-    def __init__(self, pos=OFFSCREEN, image=None, width=0, height=0, alignment=TOPLEFT):
+    def __init__(self, pos=OFFSCREEN, image=None,
+                 width=0, height=0, alignment=TOPLEFT):
         pygame.sprite.Sprite.__init__(self)
         self.image = image
         self.alignment = alignment
@@ -232,6 +233,7 @@ class ImgObj(pygame.sprite.Sprite):
     def center(self):
         return self._rect.center
 
+    @property
     def topleft(self):
         return self._rect.topleft
 
@@ -243,6 +245,10 @@ class ImgObj(pygame.sprite.Sprite):
         self._x += x
         self._y += y
         self._rect.move_ip(x, y)
+
+    def random_pos(self):
+        return (self.x + random.randrange(self.width),
+                self.y + random.randrange(self.height))
 
     def collide(self, pos):
         return self.rect.collidepoint(pos)
@@ -323,9 +329,6 @@ class TileMatrix(ImgObj):
             lambda xy1, xy2, xy3: xy1 + (TILE_SIZE * xy2) + (TILE_SIZE * xy3),
             self.pos, matrix_pos, direction))
 
-    def random_pos(self):
-        return tuple(random.randrange(d) for d in self.rect.size)
-
     def redraw(self, direction):
         '''
         Repositions all Tiles in the matrix when the center tile moves off of
@@ -360,6 +363,11 @@ class TileMatrix(ImgObj):
         for row in self.tiles:
             for tile in row:
                 yield tile
+
+    def init_tiles_for_tigers(self):
+        tiles = [t for t in self.get_matrix() if t != self.center_tile]
+        random.shuffle(tiles)
+        return tiles
 
     def update_pos(self, direction=(0, 0)):
         # use direction
@@ -410,11 +418,6 @@ class Tiger(ImgObj):
 
     def draw_picture(self, surface):
         surface.blit(self.picture, self.picture_rect.topleft)
-
-    # possible outcomes:
-    # end early due to yawn or grrr
-    # pet successfully for duration
-    # return purr score
 
     def process_pet(self, mousedown, mouse_pos):
         self.petting_time -= 1
@@ -511,8 +514,18 @@ class GameState(object):
         '''.format(self.tile_matrix, self.message_screen)
 
     def init_tigers(self):
+        tigers = []
         tiger_pics = [load_image(pic) for pic in get_file_paths(TIGER_PICS_PATH)]
-        return [Tiger(pic, pos=self.tile_matrix.random_pos()) for pic in tiger_pics]
+        tiles = self.tile_matrix.init_tiles_for_tigers()
+        print len(tiles)
+        for pic in tiger_pics:
+            try:
+                tile = tiles.pop()
+                pos = tile.random_pos()
+                tigers.append(Tiger(pic, pos=pos))
+            except IndexError:
+                pass
+        return tigers
 
     def tigers_to_pet(self):
         return [tiger for tiger in self.tigers if not tiger.petted]
