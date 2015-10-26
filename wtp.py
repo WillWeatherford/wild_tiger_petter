@@ -8,7 +8,7 @@ import pygame.locals as pgl
 #########################
 # GLOBAL CONSTANTS
 
-INFO = 'info'
+MESSAGE = 'message'
 WALKING = 'walking'
 PETTING = 'petting'
 
@@ -33,11 +33,12 @@ CENTER_CENTER = 'center center'
 
 MOVE_SPEED = 1
 
-BLACK = (  0,   0,   0)
-WHITE = (255, 255, 255)
-RED   = (255,   0,   0)
-GREEN = (  0, 255,   0)
-BLUE  = (  0,   0, 255)
+BLACK  = (  0,   0,   0)
+WHITE  = (255, 255, 255)
+RED    = (255,   0,   0)
+GREEN  = (  0, 255,   0)
+BLUE   = (  0,   0, 255)
+ORANGE = (255, 140,   0)
 
 FPS = 30  # frames per second setting
 fps_clock = pygame.time.Clock()
@@ -63,51 +64,11 @@ YAWN = 'YAAAWWWNNN...'
 PURR = 'PUUURRRRRRRRR'
 GRRR = 'GRRRRRRRRRRR!'
 
+MESSAGE_SCREEN_TIME = FPS * 10
+MESSAGE_LINE_SPACING = 20
+
 #############################
 
-
-class Text(object):
-
-    def __init__(self, font_name, pos, string, height, color,
-                 alignment=CENTER_CENTER):
-        self.font_name = font_name
-        self.pos = pos
-        self.string = string
-        self.height = height
-        self.color = color
-        self.alignment = alignment
-        self.font = pygame.font.SysFont(self.font_name, self.height)
-        self.update(self.pos, self.string)
-
-    def __str__(self):
-        return 'Text at {} saying: {}'.format(self.pos, self.string)
-
-    def get_pos(self):
-        return self.pos
-
-    def align(self, pos):
-        if self.alignment == CENTER:
-            self.rect.midtop = pos
-        elif self.alignment == CENTER_CENTER:
-            self.rect.center = pos
-        elif self.alignment == RIGHT:
-            self.rect.topright = pos
-        elif self.alignment == LEFT:
-            self.rect.topleft = pos
-
-    def update(self, pos=None, string=None, color=None):
-        if color:
-            self.color = color
-        if string:
-            self.string = string
-        if pos:
-            self.pos = pos
-        self.surface_obj = self.font.render(self.string, True, self.color)
-        self.rect = self.surface_obj.get_rect()
-        self.align(self.pos)
-
-    def draw(self, surface):
-        surface.blit(self.surface_obj, self.rect)
 
 ################################################
 # Image loading tools
@@ -136,14 +97,21 @@ def get_tiger_sprite():
     return pygame.transform.rotate(subsurface, random.choice(DEGREES))
 
 
+##########################################
+# other utils
+
+
 def init_matrix_pos(matrix_size):
     return tuple([xy - (TILE_SIZE * (matrix_size / 2)) - TILE_SIZE / 2
                   for xy in CENTER_FRAME_POS])
 
 
 def distance(pos1, pos2):
-    x_delt, y_delt = map(lambda xy1, xy2: abs(xy1 - xy2), pos1, pos2)
-    return math.hypot(x_delt, y_delt)
+    try:
+        x_delt, y_delt = map(lambda xy1, xy2: abs(xy1 - xy2), pos1, pos2)
+        return math.hypot(x_delt, y_delt)
+    except:
+        return 0
 
 
 def distances(pos_list):
@@ -239,6 +207,37 @@ class ImgObj(pygame.sprite.Sprite):
         surface.blit(self.image, self.pos)
 
 
+class Text(ImgObj):
+    def __init__(self, string, font_name, color, height, *args, **kwargs):
+        self.font = pygame.font.SysFont(font_name, height)
+        image = self.font.render(string, True, color)
+        super(Text, self).__init__(*args,
+                                   image=image,
+                                   **kwargs)
+        self.string = string
+        self.font_name = font_name
+        self.color = color
+
+    def __str__(self):
+        return 'Text at {} saying: {}'.format(self.pos, self.string)
+
+    def update(self, string=None, color=None):
+        if color:
+            self.color = color
+        if string:
+            self.string = string
+        self.image = self.font.render(self.string, True, self.color)
+        self.rect = self.image.get_rect()
+
+
+GAME_START_MESSAGES = [
+    Text('Welcome to', DEFAULT_FONT, ORANGE, 10, pos=(100, 10)),
+    Text('WILD TIGER PETTER', DEFAULT_FONT, ORANGE, 15, pos=(100, 50)),
+    Text('How about a nice walk in the jungle...', DEFAULT_FONT, ORANGE, 10, pos=(100, 110)),
+    Text('But could there be any wild tigers about?', DEFAULT_FONT, ORANGE, 10, pos=(100, 150))
+]
+
+
 class Tile(ImgObj):
     def __init__(self, *args, **kwargs):
         super(Tile, self).__init__(*args,
@@ -287,6 +286,9 @@ class TileMatrix(ImgObj):
         return tuple(map(
             lambda xy1, xy2, xy3: xy1 + (TILE_SIZE * xy2) + (TILE_SIZE * xy3),
             self.pos, matrix_pos, direction))
+
+    def random_pos(self):
+        return tuple(random.randrange(d) for d in self.rect.size)
 
     def redraw(self, direction):
         '''
@@ -369,8 +371,12 @@ class Tiger(ImgObj):
         self.picture_rect = picture.get_rect()
         self.picture_rect.center = CENTER_FRAME_POS
         self.petted = False
-        self.pets = []
+        self.last_pet_pos = None
+        self.distances = []
         self.pet_score = 0
+        self.yawn_score = 0
+        self.grrr_score = 0
+        self.response = ''
         self.desired_pet_speed = random.randrange(MIN_PET_SPEED, MAX_PET_SPEED)
         self.too_fast = self.desired_pet_speed * TOO_FAST_MOD
         self.too_slow = self.desired_pet_speed / TOO_SLOW_MOD
@@ -378,72 +384,119 @@ class Tiger(ImgObj):
 
     # need better position to draw picture to center on screen
     def draw_picture(self, surface):
-        surface.blit(self.picture, self.rect.topleft)
+        surface.blit(self.picture, self.picture_rect.topleft)
 
-    def process_pet(self, mousedown):
+    # possible outcomes:
+    # end early due to yawn or grrr
+    # pet successfully for duration
+    # return purr score
+
+    def process_pet(self, mousedown, mouse_pos):
         self.petting_time -= 1
-        if len(self.pets) > 40:
-            self.pets.pop()
         if mousedown:
-            self.pets.insert(0, pygame.mouse.get_pos())
-            pet_speed = avg_distance(self.pets)
-            if self.too_slow <= pet_speed < self.too_fast:
-                # make score higher closer to desired speed
-                self.pet_score += 1
-            print('Pet speed: {:.2f} vs {:.2f}; Pet score: {:.2f}'.format(
-                  pet_speed, self.desired_pet_speed, self.pet_score))
+            dist = distance(self.last_pet_pos, mouse_pos)
+            self.last_pet_pos = mouse_pos
         else:
-            self.pets = []
+            dist = 0
+            self.last_pet_pos = None
+
+        self.distances.insert(0, dist)
+        if len(self.distances) > 40:
+            self.distances.pop()
+
+        pet_speed = sum(self.distances) / len(self.distances)
+
+        # make score higher closer to desired speed
+        if pet_speed >= self.too_fast:
+            self.response = GRRR
+            self.grrr_score += pet_speed - self.too_fast
+        elif pet_speed <= self.too_slow:
+            self.response = YAWN
+            self.yawn_score += pet_speed - self.too_slow
+        else:
+            self.pet_score += 1 / abs(pet_speed - self.desired_pet_speed)
+            self.response = PURR
+
+        print('Time: {}; Pet speed: {:.2f} vs {:.2f} Purr: {:.2f}, Grrr: {:.2f}, Yawn: {:.2f}'.format(
+              self.petting_time, pet_speed, self.desired_pet_speed,
+              self.pet_score, self.grrr_score, self.yawn_score))
+
+        # or if tiger gets too bored or too annoyed
         if self.petting_time <= 0:
             self.petted = True
             self.pos = OFFSCREEN
-            return True
-        return False
+
+        return self.petted
 
 
-# move petting to tiger object
+class MessageScreen(object):
+    def __init__(self, messages, next_mode_func):
+        print('1')
+        self.messages = messages
+        print('2')
+        self.next_mode_func = next_mode_func
+        print('3')
+        self.time = MESSAGE_SCREEN_TIME
+        print('4')
+
+    def __str__(self):
+        return 'MessageScreen:\n{}'.format(
+            '\n'.join([str(m) for m in self.messages]))
+
+    def update(self):
+        print('update MessageScreen with {} remaining'.format(self.time))
+        self.time -= 1
+        if self.time <= 0:
+            self.next_mode_func()
+
+    def draw(self, surface):
+        for m in self.messages:
+            m.draw(surface)
+
+
 class GameState(object):
     '''
     Master game state, containing current player action, tile map, game
-    objects on map.
+    objects on map, and any messages to display between modes.
     '''
 
     def __init__(self, matrix_size):
+        self.mode = MESSAGE
+        self.message_screen = MessageScreen(GAME_START_MESSAGES, self.start_walking)
         self.tile_matrix = TileMatrix(matrix_size,
                                       pos=init_matrix_pos(matrix_size))
         self.tigers = self.init_tigers()
-        print self.tigers_to_pet()
+        self.tiger_to_pet = None
         self.player = Player(pos=CENTER_FRAME_POS)
-        self.start_walking()
 
     def __str__(self):
         return '''
         GameState;
         {}
-        '''.format(self.tile_matrix)
-
-    def random_pos(self):
-        return tuple(random.randrange(d) for d in self.tile_matrix.rect.size)
+        {}
+        '''.format(self.tile_matrix, self.message_screen)
 
     def init_tigers(self):
         tiger_pics = [load_image(pic) for pic in get_file_paths(TIGER_PICS_PATH)]
-        return [Tiger(pic, pos=self.random_pos()) for pic in tiger_pics]
+        return [Tiger(pic, pos=self.tile_matrix.random_pos()) for pic in tiger_pics]
 
     def tigers_to_pet(self):
         return [tiger for tiger in self.tigers if not tiger.petted]
 
-    def start_petting(self, tiger):
+    def start_petting(self):
         print('start_petting')
         self.mode = PETTING
-        self.tiger_to_pet = tiger
         self.direction = None
         self.mousedown = False
+        self.message_screen = None
 
     def start_walking(self):
+        print('start_walking')
         self.mode = WALKING
         self.direction = None
         self.tiger_to_pet = None
         self.mousedown = False
+        self.message_screen = None
 
     def process_event(self, event):
         keyup, keydown = None, None
@@ -466,15 +519,21 @@ class GameState(object):
                 self.mousedown = False
 
     def move(self, direction):
-        self.tile_matrix.move(direction)
-        for tiger in self.tigers_to_pet():
-            tiger.move(direction)
-            # should check if collide with player, not center pos
-            if tiger.collide(CENTER_FRAME_POS):
-                self.start_petting(tiger)
+        if self.mode == WALKING:
+            self.tile_matrix.move(direction)
+            for tiger in self.tigers_to_pet():
+                tiger.move(direction)
+                # should check if collide with player, not center pos
+                if tiger.collide(CENTER_FRAME_POS):
+                    self.tiger_to_pet = tiger
+                    self.mode = MESSAGE
+                    self.message_screen = MessageScreen(GAME_START_MESSAGES,
+                                                        self.start_petting)
 
     def draw(self, surface):
-        if self.mode == WALKING:
+        if self.mode == MESSAGE:
+            self.message_screen.draw(surface)
+        elif self.mode == WALKING:
             self.tile_matrix.draw(surface)
             for tiger in self.tigers_to_pet():
                 tiger.draw(surface)
@@ -483,11 +542,16 @@ class GameState(object):
             self.tiger_to_pet.draw_picture(surface)
 
     def update(self):
+        if self.mode == MESSAGE and self.message_screen:
+            self.message_screen.update()
         if self.mode == WALKING and self.direction:
             self.move(self.direction)
         if self.mode == PETTING and self.tiger_to_pet:
-            if self.tiger_to_pet.process_pet(self.mousedown):
-                self.start_walking()
+            if self.tiger_to_pet.process_pet(self.mousedown,
+                                             pygame.mouse.get_pos()):
+                self.mode = MESSAGE
+                self.message_screen = MessageScreen(GAME_START_MESSAGES,
+                                                    self.start_walking)
         # put useful stuff here to switch between modes
 
     def quit(self):
