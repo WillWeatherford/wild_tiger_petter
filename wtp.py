@@ -11,6 +11,7 @@ import pygame.locals as pgl
 MESSAGE = 'message'
 WALKING = 'walking'
 PETTING = 'petting'
+GAME_OVER = 'game over'
 
 OFFSCREEN = (-2000, -2000)
 
@@ -64,9 +65,48 @@ YAWN = 'YAAAWWWNNN...'
 PURR = 'PUUURRRRRRRRR'
 GRRR = 'GRRRRRRRRRRR!'
 
-MESSAGE_SCREEN_TIME = FPS * 10
+YAWN_MIN = -500
+GRRR_MAX = 500
+
+MESSAGE_FONT_HEIGHT = 20
+MESSAGE_SCREEN_TIME = FPS * 5
 MESSAGE_LINE_SPACING = 20
 
+TOPLEFT = 'topleft'
+CENTER = 'center'
+
+GAME_START_MESSAGES = [
+    'Welcome to',
+    'WILD TIGER PETTER',
+    'How about a nice walk in the jungle...',
+    'But could there be any wild tigers about?'
+]
+BEFORE_PET_MESSAGES = [
+    "It's a ferociously cute tiger!",
+    'Pet it before it gets away!'
+]
+PURR_MESSAGES = [
+    'Great job petting that tiger!',
+    'Now back to that nice walk...'
+]
+GRRR_MESSAGES = [
+    'That tiger got angry and stalked off.',
+    'Maybe there are more around...'
+]
+YAWN_MESSAGES = [
+    'That tiger became bored and wandered away.',
+    'Maybe there are more around...'
+]
+GAME_OVER_MESSAGES = [
+    'Game Over.',
+    'Congratulations!'
+]
+
+PET_FEEDBACK = {
+    PURR: PURR_MESSAGES,
+    YAWN: YAWN_MESSAGES,
+    GRRR: GRRR_MESSAGES
+}
 #############################
 
 
@@ -133,9 +173,10 @@ def avg_distance(pos_list):
 
 
 class ImgObj(pygame.sprite.Sprite):
-    def __init__(self, pos=OFFSCREEN, image=None, width=0, height=0):
+    def __init__(self, pos=OFFSCREEN, image=None, width=0, height=0, alignment=TOPLEFT):
         pygame.sprite.Sprite.__init__(self)
         self.image = image
+        self.alignment = alignment
         if image:
             self.rect = self.image.get_rect()
         else:
@@ -157,7 +198,7 @@ class ImgObj(pygame.sprite.Sprite):
         if not isinstance(pos, tuple) and len(pos) == 2:
             raise TypeError('{} pos must be tuple len 2.'.format(repr(self)))
         self._x, self._y = pos
-        self.rect.topleft = pos
+        setattr(self.rect, self.alignment, pos)
 
     @property
     def x(self):
@@ -177,7 +218,7 @@ class ImgObj(pygame.sprite.Sprite):
         self._width = rect.width
         self._height = rect.height
         self._center = rect.center
-        self.pos = rect.topleft
+        self.pos = getattr(rect, self.alignment)
 
     @property
     def width(self):
@@ -190,6 +231,9 @@ class ImgObj(pygame.sprite.Sprite):
     @property
     def center(self):
         return self._rect.center
+
+    def topleft(self):
+        return self._rect.topleft
 
     def move(self, direction):
         if not isinstance(direction, tuple) and len(direction) == 2:
@@ -204,19 +248,19 @@ class ImgObj(pygame.sprite.Sprite):
         return self.rect.collidepoint(pos)
 
     def draw(self, surface):
-        surface.blit(self.image, self.pos)
+        surface.blit(self.image, self.rect)
 
 
 class Text(ImgObj):
     def __init__(self, string, font_name, color, height, *args, **kwargs):
+        self.string = string
+        self.font_name = font_name
+        self.color = color
         self.font = pygame.font.SysFont(font_name, height)
         image = self.font.render(string, True, color)
         super(Text, self).__init__(*args,
                                    image=image,
                                    **kwargs)
-        self.string = string
-        self.font_name = font_name
-        self.color = color
 
     def __str__(self):
         return 'Text at {} saying: {}'.format(self.pos, self.string)
@@ -228,14 +272,6 @@ class Text(ImgObj):
             self.string = string
         self.image = self.font.render(self.string, True, self.color)
         self.rect = self.image.get_rect()
-
-
-GAME_START_MESSAGES = [
-    Text('Welcome to', DEFAULT_FONT, ORANGE, 10, pos=(100, 10)),
-    Text('WILD TIGER PETTER', DEFAULT_FONT, ORANGE, 15, pos=(100, 50)),
-    Text('How about a nice walk in the jungle...', DEFAULT_FONT, ORANGE, 10, pos=(100, 110)),
-    Text('But could there be any wild tigers about?', DEFAULT_FONT, ORANGE, 10, pos=(100, 150))
-]
 
 
 class Tile(ImgObj):
@@ -349,17 +385,6 @@ class TileMatrix(ImgObj):
             tile.draw(surface)
 
 
-class TigerHandler(object):
-    def __init__(self, tiger):
-        pass
-
-    def __iter__(self):
-        return self
-
-    def __next__(self):
-        pass
-
-
 class Tiger(ImgObj):
     def __init__(self, picture, *args, **kwargs):
         super(Tiger, self).__init__(*args,
@@ -370,6 +395,7 @@ class Tiger(ImgObj):
         self.picture = picture
         self.picture_rect = picture.get_rect()
         self.picture_rect.center = CENTER_FRAME_POS
+
         self.petted = False
         self.last_pet_pos = None
         self.distances = []
@@ -382,7 +408,6 @@ class Tiger(ImgObj):
         self.too_slow = self.desired_pet_speed / TOO_SLOW_MOD
         self.petting_time = PETTING_TIME
 
-    # need better position to draw picture to center on screen
     def draw_picture(self, surface):
         surface.blit(self.picture, self.picture_rect.topleft)
 
@@ -406,7 +431,6 @@ class Tiger(ImgObj):
 
         pet_speed = sum(self.distances) / len(self.distances)
 
-        # make score higher closer to desired speed
         if pet_speed >= self.too_fast:
             self.response = GRRR
             self.grrr_score += pet_speed - self.too_fast
@@ -414,15 +438,19 @@ class Tiger(ImgObj):
             self.response = YAWN
             self.yawn_score += pet_speed - self.too_slow
         else:
+            # the score is higher closer to desired speed
             self.pet_score += 1 / abs(pet_speed - self.desired_pet_speed)
             self.response = PURR
 
-        print('Time: {}; Pet speed: {:.2f} vs {:.2f} Purr: {:.2f}, Grrr: {:.2f}, Yawn: {:.2f}'.format(
-              self.petting_time, pet_speed, self.desired_pet_speed,
-              self.pet_score, self.grrr_score, self.yawn_score))
+        print('Time: {}; Pet speed: {:.2f} vs {:.2f} Purr: {:.2f}, '
+              'Grrr: {:.2f}, Yawn: {:.2f}'.format(
+                  self.petting_time, pet_speed, self.desired_pet_speed,
+                  self.pet_score, self.grrr_score, self.yawn_score))
 
         # or if tiger gets too bored or too annoyed
-        if self.petting_time <= 0:
+        if self.petting_time <= 0 \
+            or self.yawn_score <= YAWN_MIN \
+                or self.grrr_score >= GRRR_MAX:
             self.petted = True
             self.pos = OFFSCREEN
 
@@ -430,21 +458,27 @@ class Tiger(ImgObj):
 
 
 class MessageScreen(object):
-    def __init__(self, messages, next_mode_func):
-        print('1')
-        self.messages = messages
-        print('2')
+    def __init__(self, messages, next_mode_func, alignment=CENTER):
         self.next_mode_func = next_mode_func
-        print('3')
         self.time = MESSAGE_SCREEN_TIME
-        print('4')
+
+        if alignment == TOPLEFT:
+            x = 100
+        elif alignment == CENTER:
+            x = FRAME_WIDTH / 2
+
+        print((FRAME_HEIGHT / len(messages) + 1))
+        self.messages = [
+            Text(m, DEFAULT_FONT, ORANGE, MESSAGE_FONT_HEIGHT,
+                 pos=(x, (i + 1) * (FRAME_HEIGHT / (len(messages) + 1))),
+                 alignment=alignment)
+            for i, m in enumerate(messages)]
 
     def __str__(self):
         return 'MessageScreen:\n{}'.format(
             '\n'.join([str(m) for m in self.messages]))
 
     def update(self):
-        print('update MessageScreen with {} remaining'.format(self.time))
         self.time -= 1
         if self.time <= 0:
             self.next_mode_func()
@@ -527,7 +561,7 @@ class GameState(object):
                 if tiger.collide(CENTER_FRAME_POS):
                     self.tiger_to_pet = tiger
                     self.mode = MESSAGE
-                    self.message_screen = MessageScreen(GAME_START_MESSAGES,
+                    self.message_screen = MessageScreen(BEFORE_PET_MESSAGES,
                                                         self.start_petting)
 
     def draw(self, surface):
@@ -550,8 +584,11 @@ class GameState(object):
             if self.tiger_to_pet.process_pet(self.mousedown,
                                              pygame.mouse.get_pos()):
                 self.mode = MESSAGE
-                self.message_screen = MessageScreen(GAME_START_MESSAGES,
-                                                    self.start_walking)
+                self.message_screen = MessageScreen(
+                    PET_FEEDBACK[self.tiger_to_pet.response],
+                    self.start_walking)
+        if not self.tigers_to_pet():
+            self.mode = GAME_OVER
         # put useful stuff here to switch between modes
 
     def quit(self):

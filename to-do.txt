@@ -1,17 +1,18 @@
 
 movement keys are sticky, need to fix
 use list of movement keys instead of booleans
+animated player sprite
 
 Tigers on Map
     place tiger objects on board when adding tiles
     don't spawn on center tile
     distribute evenly, one tiger per tile
+    move tigers when tiles are deleted/added
+    populate "ROAR" text messages on map for off-screen tigers
 
 Tiger Petting
-    center picture in frame
     scale to frame
     set petting boxes for each tiger individually
-    move petting program to tiger object
-    remove a 'pet' from list every frame... or add a zero distance
+    real time petting feedback
 
 figure out where to attach methods for determining initial start positions of stuff
