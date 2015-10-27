@@ -250,8 +250,11 @@ class ImgObj(pygame.sprite.Sprite):
         return (self.x + random.randrange(self.width),
                 self.y + random.randrange(self.height))
 
-    def collide(self, pos):
+    def collide_pos(self, pos):
         return self.rect.collidepoint(pos)
+
+    def collide_rect(self, rect):
+        return self.rect.colliderect(rect)
 
     def draw(self, surface):
         surface.blit(self.image, self.rect)
@@ -335,9 +338,8 @@ class TileMatrix(ImgObj):
         the center point where the player is.
         Overwrites tiles on the trailing edge. Creates new tiles on the leading
         edge.
+        This creates the illusion of a constant unending map.
         '''
-        # print('Matrix pos before redraw: {}'.format(self))
-
         # dx and dy track the individual x and y movement vectors
         dx, dy = direction
         # remember: direction of map movement is reversed compared to
@@ -364,8 +366,19 @@ class TileMatrix(ImgObj):
             for tile in row:
                 yield tile
 
-    def init_tiles_for_tigers(self):
-        tiles = [t for t in self.get_matrix() if t != self.center_tile]
+    def get_tiles_for_tigers(self, tigers=[], direction=(0, 0)):
+
+        tiger_rect_list = [t.rect for t in tigers]
+
+        d = {1: [0], 0: self.index_range, -1: [-1]}
+
+        x_range, y_range = tuple(d[xy] for xy in direction)
+
+        print('x_range: {}, y_range: {}'.format(x_range, y_range))
+
+        tiles = [self.tiles[x][y] for x in x_range for y in y_range
+                 if not self.tiles[x][y].rect.collidelistall(tiger_rect_list)
+                 and self.tiles[x][y] != self.center_tile]
         random.shuffle(tiles)
         return tiles
 
@@ -375,13 +388,10 @@ class TileMatrix(ImgObj):
         self.pos = self.tiles[0][0].pos
 
     def off_center(self):
-        # print('In off_center(): CENTER_FRAME_POS = {}'.format(CENTER_FRAME_POS))
-        return not self.center_tile.collide(CENTER_FRAME_POS)
+        return not self.center_tile.collide_pos(CENTER_FRAME_POS)
 
     def move(self, direction):
-        # note, direction is a tuple (x change, y change)
         super(TileMatrix, self).move(direction)
-        self.rect.move_ip(direction)
         for tile in self.get_matrix():
             tile.move(direction)
         if self.off_center():
@@ -470,7 +480,6 @@ class MessageScreen(object):
         elif alignment == CENTER:
             x = FRAME_WIDTH / 2
 
-        print((FRAME_HEIGHT / len(messages) + 1))
         self.messages = [
             Text(m, DEFAULT_FONT, ORANGE, MESSAGE_FONT_HEIGHT,
                  pos=(x, (i + 1) * (FRAME_HEIGHT / (len(messages) + 1))),
@@ -478,7 +487,8 @@ class MessageScreen(object):
             for i, m in enumerate(messages)]
 
     def __str__(self):
-        return 'MessageScreen:\n{}'.format(
+        return 'MessageScreen: time remaining: {}\n{}'.format(
+            self.time,
             '\n'.join([str(m) for m in self.messages]))
 
     def update(self):
@@ -508,16 +518,16 @@ class GameState(object):
 
     def __str__(self):
         return '''
-        GameState;
+        GameState current mode: {}
         {}
         {}
-        '''.format(self.tile_matrix, self.message_screen)
+        '''.format(self.mode, self.tile_matrix, self.message_screen)
 
     def init_tigers(self):
         tigers = []
         tiger_pics = [load_image(pic) for pic in get_file_paths(TIGER_PICS_PATH)]
-        tiles = self.tile_matrix.init_tiles_for_tigers()
-        print len(tiles)
+        tiles = self.tile_matrix.get_tiles_for_tigers()
+        print('{} tiger pics, {} tiles'.format(len(tiger_pics), len(tiles)))
         for pic in tiger_pics:
             try:
                 tile = tiles.pop()
@@ -571,11 +581,19 @@ class GameState(object):
             for tiger in self.tigers_to_pet():
                 tiger.move(direction)
                 # should check if collide with player, not center pos
-                if tiger.collide(CENTER_FRAME_POS):
+                if tiger.collide_pos(CENTER_FRAME_POS):
                     self.tiger_to_pet = tiger
                     self.mode = MESSAGE
                     self.message_screen = MessageScreen(BEFORE_PET_MESSAGES,
                                                         self.start_petting)
+                # if tiger has been "stranded" by the tile matrix re-drawing itself
+                if not tiger.collide_rect(self.tile_matrix.rect):
+                    # find a new home tile for the tiger
+                    # it will essentially teleport across the map to the leading edge
+                    tiles = self.tile_matrix.get_tiles_for_tigers(
+                        self.tigers_to_pet(), direction)
+                    if tiles:
+                        tiger.pos = random.choice(tiles).random_pos()
 
     def draw(self, surface):
         if self.mode == MESSAGE:
@@ -589,6 +607,7 @@ class GameState(object):
             self.tiger_to_pet.draw_picture(surface)
 
     def update(self):
+        # print(self)
         if self.mode == MESSAGE and self.message_screen:
             self.message_screen.update()
         if self.mode == WALKING and self.direction:
@@ -600,8 +619,8 @@ class GameState(object):
                 self.message_screen = MessageScreen(
                     PET_FEEDBACK[self.tiger_to_pet.response],
                     self.start_walking)
-        if not self.tigers_to_pet():
-            self.mode = GAME_OVER
+        # if not self.tigers_to_pet():
+        #     self.mode = GAME_OVER
         # put useful stuff here to switch between modes
 
     def quit(self):
