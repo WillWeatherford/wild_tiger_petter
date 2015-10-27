@@ -4,13 +4,9 @@ use list of movement keys instead of booleans
 animated player sprite
 
 Tigers on Map
-    don't spawn on center tile
-    move tigers when tiles are deleted/added
     populate "ROAR" text messages on map for off-screen tigers
 
 Tiger Petting
     scale to frame
     set petting boxes for each tiger individually
     real time petting feedback
-
-figure out where to attach methods for determining initial start positions of stuff
