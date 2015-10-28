@@ -471,12 +471,12 @@ class Tiger(ImgObj):
         self.pet_bar.pos = PET_BAR_CENTER
 
         if pet_speed >= self.too_fast:
-            self.pet_text.update(pos=PET_TEXT_CENTER, string=GRRR, color=RED)
             self.grrr_score += abs(pet_speed - self.too_fast)
+            self.pet_text.update(pos=PET_TEXT_CENTER, string=GRRR, color=RED)
             self.pet_bar.fill(RED)
         elif pet_speed <= self.too_slow:
-            self.pet_text.update(pos=PET_TEXT_CENTER, string=YAWN, color=YELLOW)
             self.yawn_score += abs(pet_speed - self.too_slow)
+            self.pet_text.update(pos=PET_TEXT_CENTER, string=YAWN, color=YELLOW)
             self.pet_bar.fill(YELLOW)
         else:
             # the score is higher closer to desired speed
@@ -484,26 +484,32 @@ class Tiger(ImgObj):
             self.pet_text.update(pos=PET_TEXT_CENTER, string=PURR, color=ORANGE)
             self.pet_bar.fill(ORANGE)
 
-        print('Pet Bar: {}; center: {}'.format(self.pet_bar, self.pet_bar.center))
-        # print('Time: {}; Pet speed: {:.2f} vs {:.2f} Purr: {:.2f}, '
-        #       'Grrr: {:.2f}, Yawn: {:.2f}'.format(
-        #           self.petting_time, pet_speed, self.desired_pet_speed,
-        #           self.pet_score, self.grrr_score, self.yawn_score))
+        print('Time: {}; Pet speed: {:.2f} vs {:.2f} Purr: {:.2f}, '
+              'Grrr: {:.2f}, Yawn: {:.2f}'.format(
+                  self.petting_time, pet_speed, self.desired_pet_speed,
+                  self.pet_score, self.grrr_score, self.yawn_score))
 
         # or if tiger gets too bored or too annoyed
         if self.petting_time <= 0:
-            return PURR
+            result = PURR
         elif self.yawn_score >= YAWN_GRRR_MAX:
-            return YAWN
+            result = YAWN
         elif self.grrr_score >= YAWN_GRRR_MAX:
-            return GRRR
+            result = GRRR
+        else:
+            result = None
+        if result:
             self.petted = True
             self.pos = OFFSCREEN
-
-        return None
+        return result
 
 
 class MessageScreen(object):
+    '''
+    Class for managing and displaying message screens in between gameplay.
+    Automatically formats all text to be horizontally centered and
+    vertically evenly spaced.
+    '''
     def __init__(self, messages, next_mode_func, alignment=CENTER):
         self.next_mode_func = next_mode_func
         self.time = MESSAGE_SCREEN_TIME
@@ -556,6 +562,7 @@ class GameState(object):
         {}
         '''.format(self.mode, self.tile_matrix, self.message_screen)
 
+    # move to TigerManager object __init__
     def init_tigers(self):
         tigers = []
         tiger_pics = [load_image(pic) for pic in get_file_paths(TIGER_PICS_PATH)]
@@ -611,6 +618,8 @@ class GameState(object):
     def move(self, direction):
         if self.mode == WALKING:
             self.tile_matrix.move(direction)
+
+            # move this stuff to TigerManager
             for tiger in self.tigers_to_pet():
                 tiger.move(direction)
                 # should check if collide with player, not center pos
@@ -646,18 +655,17 @@ class GameState(object):
         if self.mode == WALKING and self.direction:
             self.move(self.direction)
         if self.mode == PETTING and self.tiger_to_pet:
+
+            # move this stuff to TigerManager object
             result = self.tiger_to_pet.process_pet(
                 self.mousedown, pygame.mouse.get_pos())
             if result:
-                self.tiger_to_pet.petted = True
-                self.tiger_to_pet.pos = OFFSCREEN
                 self.mode = MESSAGE
                 self.message_screen = MessageScreen(
                     PET_FEEDBACK[result],
                     self.start_walking)
         # if not self.tigers_to_pet():
         #     self.mode = GAME_OVER
-        # put useful stuff here to switch between modes
 
     def quit(self):
         pygame.quit()

@@ -3,6 +3,11 @@ movement keys are sticky, need to fix
 use list of movement keys instead of booleans
 animated player sprite
 
+Make TileMatrix to be a iterable
+TigerManager object?
+
+explicit reverse direction for TileMatrix and tigers
+
 Tigers on Map
     populate "ROAR" text messages on map for off-screen tigers
     change to 1 tiger associated as an attr of a tile
@@ -16,6 +21,11 @@ Tiger Petting
     fix center of pet feedback bar
     fix "yawn" at bar size = 0
 
+
+MEssage screens with key input instead of timer
+Start screen
+Instructions screen
+GameOver screen
 
 Move stuff around
 add docstring to every class and function
