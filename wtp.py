@@ -40,12 +40,15 @@ RED    = (255,   0,   0)
 GREEN  = (  0, 255,   0)
 BLUE   = (  0,   0, 255)
 ORANGE = (255, 140,   0)
+YELLOW = (255, 255,   0)
 
 FPS = 30  # frames per second setting
 fps_clock = pygame.time.Clock()
 
 FRAME_WIDTH, FRAME_HEIGHT = 800, 600
-CENTER_FRAME_POS = (FRAME_WIDTH / 2, FRAME_HEIGHT / 2)
+CENTER_FRAME_X = FRAME_WIDTH / 2
+CENTER_FRAME_Y = FRAME_HEIGHT / 2
+CENTER_FRAME_POS = (CENTER_FRAME_X, CENTER_FRAME_Y)
 FRAME = pygame.display.set_mode((FRAME_WIDTH, FRAME_HEIGHT))
 
 TILES_PATH = './tiles'
@@ -60,6 +63,7 @@ TIGER_W, TIGER_H = 19, 51
 MIN_PET_SPEED, MAX_PET_SPEED = 5, 10
 TOO_FAST_MOD, TOO_SLOW_MOD = 1.4, 1.4
 PETTING_TIME = FPS * 10
+PET_BAR_MOD = 80
 
 YAWN = 'YAAAWWWNNN...'
 PURR = 'PUUURRRRRRRRR'
@@ -176,11 +180,12 @@ class ImgObj(pygame.sprite.Sprite):
     def __init__(self, pos=OFFSCREEN, image=None,
                  width=0, height=0, alignment=TOPLEFT):
         pygame.sprite.Sprite.__init__(self)
-        self.image = image
         self.alignment = alignment
         if image:
+            self.image = image
             self.rect = self.image.get_rect()
         else:
+            self.image = pygame.Surface((width, height))
             self.rect = pygame.Rect(pos, (width, height))
         self.pos = pos
 
@@ -225,6 +230,11 @@ class ImgObj(pygame.sprite.Sprite):
     def width(self):
         return self._rect.width
 
+    @width.setter
+    def width(self, w):
+        self._width = w
+        self._rect.width = w
+
     @property
     def height(self):
         return self._rect.height
@@ -250,11 +260,18 @@ class ImgObj(pygame.sprite.Sprite):
         return (self.x + random.randrange(self.width),
                 self.y + random.randrange(self.height))
 
+    def collidelistall(self, a_list):
+        return self.rect.collidelistall(a_list)
+
     def collide_pos(self, pos):
         return self.rect.collidepoint(pos)
 
     def collide_rect(self, rect):
         return self.rect.colliderect(rect)
+
+    def fill(self, color):
+        self.image = pygame.Surface((self.width, self.height))
+        self.image.fill(color, rect=self.rect)
 
     def draw(self, surface):
         surface.blit(self.image, self.rect)
@@ -421,13 +438,19 @@ class Tiger(ImgObj):
         self.yawn_score = 0
         self.grrr_score = 0
         self.response = ''
+        self.pet_bar = ImgObj(pos=(CENTER_FRAME_X, 50),
+                              height=50,
+                              width=FRAME_WIDTH,
+                              alignment=CENTER)
+        print('Pet Bar:\n{}'.format(self.pet_bar))
         self.desired_pet_speed = random.randrange(MIN_PET_SPEED, MAX_PET_SPEED)
         self.too_fast = self.desired_pet_speed * TOO_FAST_MOD
         self.too_slow = self.desired_pet_speed / TOO_SLOW_MOD
         self.petting_time = PETTING_TIME
 
     def draw_picture(self, surface):
-        surface.blit(self.picture, self.picture_rect.topleft)
+        surface.blit(self.picture, self.picture_rect)
+        self.pet_bar.draw(surface)
 
     def process_pet(self, mousedown, mouse_pos):
         self.petting_time -= 1
@@ -443,22 +466,28 @@ class Tiger(ImgObj):
             self.distances.pop()
 
         pet_speed = sum(self.distances) / len(self.distances)
+        self.pet_bar.width = pet_speed * PET_BAR_MOD
+        self.pet_bar.pos = (CENTER_FRAME_X, 50)
 
         if pet_speed >= self.too_fast:
             self.response = GRRR
             self.grrr_score += pet_speed - self.too_fast
+            self.pet_bar.fill(RED)
         elif pet_speed <= self.too_slow:
             self.response = YAWN
             self.yawn_score += pet_speed - self.too_slow
+            self.pet_bar.fill(YELLOW)
         else:
             # the score is higher closer to desired speed
             self.pet_score += 1 / abs(pet_speed - self.desired_pet_speed)
             self.response = PURR
+            self.pet_bar.fill(ORANGE)
 
-        print('Time: {}; Pet speed: {:.2f} vs {:.2f} Purr: {:.2f}, '
-              'Grrr: {:.2f}, Yawn: {:.2f}'.format(
-                  self.petting_time, pet_speed, self.desired_pet_speed,
-                  self.pet_score, self.grrr_score, self.yawn_score))
+        print('Pet Bar:\n{}'.format(self.pet_bar))
+        # print('Time: {}; Pet speed: {:.2f} vs {:.2f} Purr: {:.2f}, '
+        #       'Grrr: {:.2f}, Yawn: {:.2f}'.format(
+        #           self.petting_time, pet_speed, self.desired_pet_speed,
+        #           self.pet_score, self.grrr_score, self.yawn_score))
 
         # or if tiger gets too bored or too annoyed
         if self.petting_time <= 0 \
@@ -478,7 +507,7 @@ class MessageScreen(object):
         if alignment == TOPLEFT:
             x = 100
         elif alignment == CENTER:
-            x = FRAME_WIDTH / 2
+            x = CENTER_FRAME_X
 
         self.messages = [
             Text(m, DEFAULT_FONT, ORANGE, MESSAGE_FONT_HEIGHT,

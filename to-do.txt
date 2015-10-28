@@ -5,8 +5,15 @@ animated player sprite
 
 Tigers on Map
     populate "ROAR" text messages on map for off-screen tigers
+    change to 1 tiger associated as an attr of a tile
+        easier for re-drawing and re-positioning tiles and tigers
+        shuffle and rotate same tiles --> pop and append
 
 Tiger Petting
     scale to frame
     set petting boxes for each tiger individually
     real time petting feedback
+
+
+Move stuff around
+add docstring to every class and function
