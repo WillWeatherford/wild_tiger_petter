@@ -8,11 +8,13 @@ Tigers on Map
     change to 1 tiger associated as an attr of a tile
         easier for re-drawing and re-positioning tiles and tigers
         shuffle and rotate same tiles --> pop and append
+        reposition tiles and tigers
 
 Tiger Petting
-    scale to frame
+    scale picture to frame
     set petting boxes for each tiger individually
-    real time petting feedback
+    fix center of pet feedback bar
+    fix "yawn" at bar size = 0
 
 
 Move stuff around
