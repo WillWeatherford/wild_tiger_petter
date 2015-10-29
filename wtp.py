@@ -303,6 +303,50 @@ class Text(ImgObj):
         self.pos = pos
 
 
+class MessageScreen(object):
+    '''
+    Class for managing and displaying message screens in between gameplay.
+    Automatically formats all text to be horizontally centered and
+    vertically evenly spaced.
+    '''
+    def __init__(self, messages, next_mode_func, alignment=CENTER):
+        self.next_mode_func = next_mode_func
+        self.time = MESSAGE_SCREEN_TIME
+
+        if alignment == TOPLEFT:
+            x = 100
+        elif alignment == CENTER:
+            x = CENTER_FRAME_X
+
+        self.messages = [
+            Text(m, DEFAULT_FONT, ORANGE, MESSAGE_FONT_HEIGHT,
+                 pos=(x, (i + 1) * (FRAME_HEIGHT / (len(messages) + 1))),
+                 alignment=alignment)
+            for i, m in enumerate(messages)]
+
+    def __str__(self):
+        return 'MessageScreen: time remaining: {}\n{}'.format(
+            self.time,
+            '\n'.join([str(m) for m in self.messages]))
+
+    def update(self):
+        self.time -= 1
+        if self.time <= 0:
+            self.next_mode_func()
+
+    def draw(self, surface):
+        for m in self.messages:
+            m.draw(surface)
+
+
+class Player(ImgObj):
+    def __init__(self, *args, **kwargs):
+        super(Player, self).__init__(*args, **kwargs)
+
+    def draw(self, surface):
+        self.image = pygame.draw.circle(surface, RED, self.pos, 10)
+
+
 class Tile(ImgObj):
     def __init__(self, *args, **kwargs):
         super(Tile, self).__init__(*args,
@@ -313,14 +357,6 @@ class Tile(ImgObj):
 
     def __str__(self):
         return 'Tile at {}'.format(self.pos)
-
-
-class Player(ImgObj):
-    def __init__(self, *args, **kwargs):
-        super(Player, self).__init__(*args, **kwargs)
-
-    def draw(self, surface):
-        self.image = pygame.draw.circle(surface, RED, self.pos, 10)
 
 
 # make TileMatrix into an iterable class?
@@ -442,42 +478,6 @@ class Tiger(ImgObj):
         self.picture.draw(surface)
 
 
-class MessageScreen(object):
-    '''
-    Class for managing and displaying message screens in between gameplay.
-    Automatically formats all text to be horizontally centered and
-    vertically evenly spaced.
-    '''
-    def __init__(self, messages, next_mode_func, alignment=CENTER):
-        self.next_mode_func = next_mode_func
-        self.time = MESSAGE_SCREEN_TIME
-
-        if alignment == TOPLEFT:
-            x = 100
-        elif alignment == CENTER:
-            x = CENTER_FRAME_X
-
-        self.messages = [
-            Text(m, DEFAULT_FONT, ORANGE, MESSAGE_FONT_HEIGHT,
-                 pos=(x, (i + 1) * (FRAME_HEIGHT / (len(messages) + 1))),
-                 alignment=alignment)
-            for i, m in enumerate(messages)]
-
-    def __str__(self):
-        return 'MessageScreen: time remaining: {}\n{}'.format(
-            self.time,
-            '\n'.join([str(m) for m in self.messages]))
-
-    def update(self):
-        self.time -= 1
-        if self.time <= 0:
-            self.next_mode_func()
-
-    def draw(self, surface):
-        for m in self.messages:
-            m.draw(surface)
-
-
 class TigerManager(object):
     def __init__(self, tile_matrix):
         tiger_pics = [load_image(pic) for pic in get_file_paths(TIGER_PICS_PATH)]
@@ -494,7 +494,7 @@ class TigerManager(object):
     def reset(self):
         self.tiger_to_pet = None
         self.last_pet_pos = None
-        self.distances = []  # give it a better starting list of distances
+        self.distances = []  # give a better starting list of distances
         self.pet_score = 0
         self.yawn_score = 0
         self.grrr_score = 0
