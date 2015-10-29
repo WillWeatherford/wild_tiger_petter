@@ -22,17 +22,17 @@ DOWN = pgl.K_DOWN
 RIGHT = pgl.K_RIGHT
 LEFT = pgl.K_LEFT
 
-DIRECTIONS = {UP: (0, 1),
-              RIGHT: (-1, 0),
-              LEFT: (1, 0),
-              DOWN: (0, -1)}
+DIRECTIONS = {UP: (0, -1),
+              RIGHT: (1, 0),
+              LEFT: (-1, 0),
+              DOWN: (0, 1)}
 
 
 CENTER = 'center'
 CENTER_CENTER = 'center center'
 
 
-MOVE_SPEED = 2
+MOVE_SPEED = 1
 
 BLACK  = (  0,   0,   0)
 WHITE  = (255, 255, 255)
@@ -77,7 +77,7 @@ GRRR = 'GRRRRRRRRRRR!'
 YAWN_GRRR_MAX = 500
 
 MESSAGE_FONT_HEIGHT = 20
-MESSAGE_SCREEN_TIME = FPS * 5
+MESSAGE_SCREEN_TIME = FPS * 1
 MESSAGE_LINE_SPACING = 20
 
 TOPLEFT = 'topleft'
@@ -154,6 +154,12 @@ def init_matrix_pos(matrix_size):
                   for xy in CENTER_FRAME_POS])
 
 
+def rel_tile_pos(matrix_pos, tile_pos_in_matrix, direction=(0, 0)):
+    return tuple(map(
+        lambda xy1, xy2, xy3: xy1 + (TILE_SIZE * xy2) + (TILE_SIZE * xy3),
+        matrix_pos, tile_pos_in_matrix, direction))
+
+
 def distance(pos1, pos2):
     try:
         x_delt, y_delt = map(lambda xy1, xy2: abs(xy1 - xy2), pos1, pos2)
@@ -178,6 +184,26 @@ def total_distance(pos_list, total=0):
 
 def avg_distance(pos_list):
     return total_distance(pos_list) / len(pos_list)
+
+
+def trailing_index(vector):
+    if vector < 0:
+        return -1
+    elif vector > 0:
+        return 0
+
+
+def leading_index(vector, iterable):
+    if vector < 0:
+        return 0
+    elif vector > 0:
+        return len(iterable) - 1
+
+
+def mirror_direction(direction):
+    return tuple(-xy for xy in direction)
+
+#######################################################
 
 
 class ImgObj(pygame.sprite.Sprite):
@@ -348,20 +374,34 @@ class Player(ImgObj):
 
 
 class Tile(ImgObj):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, matrix_pos, tile_pos_in_matrix, *args, **kwargs):
+        pos = rel_tile_pos(matrix_pos, tile_pos_in_matrix)
         super(Tile, self).__init__(*args,
+                                   pos=pos,
                                    image=load_rand_tile(),
                                    width=TILE_SIZE,
                                    height=TILE_SIZE,
                                    **kwargs)
+        self.tiger = None
 
     def __str__(self):
         return 'Tile at {}'.format(self.pos)
 
+    def place_tiger(self, tiger):
+        # randomly rotate tiger
+        self.tiger = tiger
+        self.tiger.pos = self.random_pos()
 
-# make TileMatrix into an iterable class?
+    def reposition(self, matrix_pos, tile_pos_in_matrix, direction=(0, 0)):
+        # get new random and rotated image
+        self.pos = rel_tile_pos(matrix_pos, tile_pos_in_matrix, direction)
+        if self.tiger:
+            self.place_tiger(self.tiger)
+
+
+# make TileMatrix into an iterable class
 class TileMatrix(ImgObj):
-    def __init__(self, size, *args, **kwargs):
+    def __init__(self, size, tigers, *args, **kwargs):
         super(TileMatrix, self).__init__(*args,
                                          width=TILE_SIZE * size,
                                          height=TILE_SIZE * size,
@@ -371,10 +411,20 @@ class TileMatrix(ImgObj):
         self.size = int(size)
         self.index_range = range(size)
         self.center_index = size / 2
-        self.tiles = [[Tile(self.rel_tile_pos((matrix_x, matrix_y)))
+        self.tiles = [[Tile(self.pos, (matrix_x, matrix_y))
                        for matrix_y in self.index_range]
                       for matrix_x in self.index_range]
         self.update_pos()
+        tiles = list(self.get_matrix())
+        random.shuffle(tiles)
+
+        for tile in tiles:
+            if tile != self.center_tile:
+                try:
+                    if not tile.tiger:
+                        tile.place_tiger(tigers.pop())
+                except IndexError:
+                    pass
 
     def __str__(self):
         tiles = '\n'.join([' | '.join(
@@ -383,12 +433,7 @@ class TileMatrix(ImgObj):
             for y in self.index_range])
         return 'Tile Matrix with upperleft at {}\n{}'.format(self.pos, tiles)
 
-    def rel_tile_pos(self, matrix_pos, direction=(0, 0)):
-        return tuple(map(
-            lambda xy1, xy2, xy3: xy1 + (TILE_SIZE * xy2) + (TILE_SIZE * xy3),
-            self.pos, matrix_pos, direction))
-
-    def redraw(self, direction):
+    def reposition(self, direction):
         '''
         Repositions all Tiles in the matrix when the center tile moves off of
         the center point where the player is.
@@ -401,42 +446,27 @@ class TileMatrix(ImgObj):
         # remember: direction of map movement is reversed compared to
         # arrow direction (player direction)
 
-        x_range = self.index_range[::-dx or -dy]
-        y_range = self.index_range[::-dy or -dx]
-        for x in x_range:
-            for y in y_range:
-                if x + dx >= 0 and y + dy >= 0:
-                    try:
-                        self.tiles[x + dx][y + dy] = self.tiles[x][y]
-                    except IndexError:
-                        # delete a tile/remove it from list
-                        pass
-                        # print('Index error raised; need to ignore and insert '
-                        #       'at end of row/column')
-                if (dx and x == x_range[-1]) or (dy and y == y_range[-1]):
-                    self.tiles[x][y] = Tile(self.rel_tile_pos((x - dx, y - dy)))
+        if dx:
+            tiles_to_move = self.tiles.pop(trailing_index(dx))
+            random.shuffle(tiles_to_move)
+            x = leading_index(dx, tiles_to_move)
+            self.tiles.insert(x, tiles_to_move)
+            for y, tile in enumerate(tiles_to_move):
+                tile.reposition(self.pos, (x, y), direction)
+        elif dy:
+            tiles_to_move = [x.pop(trailing_index(dy)) for x in self.tiles]
+            random.shuffle(tiles_to_move)
+            for x, tile in enumerate(tiles_to_move):
+                y = leading_index(dy, tiles_to_move)
+                self.tiles[x].insert(y, tile)
+                tile.reposition(self.pos, (x, y), direction)
+        print(self)
         self.update_pos()
 
     def get_matrix(self):
         for row in self.tiles:
             for tile in row:
                 yield tile
-
-    def get_tiles_for_tigers(self, tigers=[], direction=(0, 0)):
-
-        tiger_rect_list = [t.rect for t in tigers]
-
-        d = {1: [0], 0: self.index_range, -1: [-1]}
-
-        x_range, y_range = tuple(d[xy] for xy in direction)
-
-        print('x_range: {}, y_range: {}'.format(x_range, y_range))
-
-        tiles = [self.tiles[x][y] for x in x_range for y in y_range
-                 if not self.tiles[x][y].rect.collidelistall(tiger_rect_list)
-                 and self.tiles[x][y] != self.center_tile]
-        random.shuffle(tiles)
-        return tiles
 
     def update_pos(self, direction=(0, 0)):
         # use direction
@@ -447,12 +477,12 @@ class TileMatrix(ImgObj):
         return not self.center_tile.collide_pos(CENTER_FRAME_POS)
 
     def move(self, direction):
-        super(TileMatrix, self).move(direction)
+        super(TileMatrix, self).move(mirror_direction(direction))
         for tile in self.get_matrix():
-            tile.move(direction)
+            tile.move(mirror_direction(direction))
         if self.off_center():
             print('Tile off center; redrawing.')
-            self.redraw(direction)
+            self.reposition(direction)
 
     def draw(self, surface):
         for tile in self.get_matrix():
@@ -479,17 +509,9 @@ class Tiger(ImgObj):
 
 
 class TigerManager(object):
-    def __init__(self, tile_matrix):
+    def __init__(self):
         tiger_pics = [load_image(pic) for pic in get_file_paths(TIGER_PICS_PATH)]
         self.tigers = [Tiger(pic) for pic in tiger_pics]
-        tiles = tile_matrix.get_tiles_for_tigers(self.tigers)
-        for tiger in self.tigers:
-            try:
-                tile = tiles.pop()
-                tiger.pos = tile.random_pos()
-            except IndexError:
-                pass
-
         self.pet_text = Text('', DEFAULT_FONT, ORANGE, PET_TEXT_HEIGHT,
                              pos=PET_TEXT_CENTER, alignment=CENTER)
         self.pet_bar = ImgObj(height=PET_BAR_HEIGHT,
@@ -564,9 +586,7 @@ class TigerManager(object):
         return None
 
     def tigers_to_pet(self):
-        for tiger in self.tigers:
-            if not tiger.petted:
-                yield tiger
+        return [tiger for tiger in self.tigers if not tiger.petted]
 
     def collide(self, player):
         # should check if collide with player, not center pos
@@ -576,17 +596,10 @@ class TigerManager(object):
                 return True
         return False
 
-    def move(self, direction, tile_matrix):
+    def move(self, direction):
+        direction = mirror_direction(direction)
         for tiger in self.tigers:
             tiger.move(direction)
-        # if tiger has been "stranded" by the tile matrix re-drawing itself
-            if not tiger.collide_rect(tile_matrix.rect):
-                # find a new home tile for the tiger
-                # it will essentially teleport across the map to the leading edge
-                tiles = tile_matrix.get_tiles_for_tigers(
-                    self.tigers_to_pet(), direction)
-                if tiles:
-                    tiger.pos = random.choice(tiles).random_pos()
 
     def draw_petting(self, surface):
         self.tiger_to_pet.draw_picture(surface)
@@ -606,9 +619,9 @@ class GameState(object):
     def __init__(self, matrix_size):
         self.mode = MESSAGE
         self.message_screen = MessageScreen(GAME_START_MESSAGES, self.start_walking)
-        self.tile_matrix = TileMatrix(matrix_size,
+        self.tigers = TigerManager()
+        self.tile_matrix = TileMatrix(matrix_size, self.tigers.tigers_to_pet(),
                                       pos=init_matrix_pos(matrix_size))
-        self.tigers = TigerManager(self.tile_matrix)
         self.player = Player(pos=CENTER_FRAME_POS)
         self.direction = None
         self.mousedown = False
@@ -658,7 +671,7 @@ class GameState(object):
     def move(self, direction):
         if self.mode == WALKING:
             self.tile_matrix.move(direction)  # reverse
-            self.tigers.move(direction, self.tile_matrix)  # reverse
+            self.tigers.move(direction)  # reverse
             if self.tigers.collide(self.player):  # move to Player obj rect
                 self.mode = MESSAGE
                 self.message_screen = MessageScreen(BEFORE_PET_MESSAGES,

@@ -5,14 +5,9 @@ animated player sprite
 
 Make TileMatrix to be a iterable
 
-explicit reverse direction for TileMatrix and tigers
-
 Tigers on Map
     populate "ROAR" text messages on map for off-screen tigers
-    change to 1 tiger associated as an attr of a tile
-        easier for re-drawing and re-positioning tiles and tigers
-        shuffle and rotate same tiles --> pop and append
-        reposition tiles and tigers
+    rotate and draw new image for same tiles when repositioning
 
 Tiger Petting
     scale picture to frame
