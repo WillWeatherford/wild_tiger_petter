@@ -32,7 +32,7 @@ CENTER = 'center'
 CENTER_CENTER = 'center center'
 
 
-MOVE_SPEED = 1
+MOVE_SPEED = 2
 
 BLACK  = (  0,   0,   0)
 WHITE  = (255, 255, 255)
@@ -434,74 +434,12 @@ class Tiger(ImgObj):
                               alignment=CENTER)
 
         self.petted = False
-        self.last_pet_pos = None
-        self.distances = []
-        self.pet_score = 0
-        self.yawn_score = 0
-        self.grrr_score = 0
-        self.pet_text = Text('', DEFAULT_FONT, ORANGE, PET_TEXT_HEIGHT,
-                             pos=PET_TEXT_CENTER, alignment=CENTER)
-        self.pet_bar = ImgObj(height=PET_BAR_HEIGHT,
-                              pos=PET_BAR_CENTER, alignment=CENTER)
         self.desired_pet_speed = random.randrange(MIN_PET_SPEED, MAX_PET_SPEED)
         self.too_fast = self.desired_pet_speed * TOO_FAST_MOD
         self.too_slow = self.desired_pet_speed / TOO_SLOW_MOD
-        self.petting_time = PETTING_TIME
 
-    def draw_petting(self, surface):
+    def draw_picture(self, surface):
         self.picture.draw(surface)
-        self.pet_bar.draw(surface)
-        self.pet_text.draw(surface)
-
-    def process_pet(self, mousedown, mouse_pos):
-        self.petting_time -= 1
-        if mousedown:
-            dist = distance(self.last_pet_pos, mouse_pos)
-            self.last_pet_pos = mouse_pos
-        else:
-            dist = 0
-            self.last_pet_pos = None
-
-        self.distances.insert(0, dist)
-        if len(self.distances) > NUM_PETS:
-            self.distances.pop()
-
-        pet_speed = sum(self.distances) / len(self.distances)
-        self.pet_bar.width = pet_speed * PET_BAR_MOD
-        self.pet_bar.pos = PET_BAR_CENTER
-
-        if pet_speed >= self.too_fast:
-            self.grrr_score += abs(pet_speed - self.too_fast)
-            self.pet_text.update(pos=PET_TEXT_CENTER, string=GRRR, color=RED)
-            self.pet_bar.fill(RED)
-        elif pet_speed <= self.too_slow:
-            self.yawn_score += abs(pet_speed - self.too_slow)
-            self.pet_text.update(pos=PET_TEXT_CENTER, string=YAWN, color=YELLOW)
-            self.pet_bar.fill(YELLOW)
-        else:
-            # the score is higher closer to desired speed
-            self.pet_score += 1 / abs(pet_speed - self.desired_pet_speed)
-            self.pet_text.update(pos=PET_TEXT_CENTER, string=PURR, color=ORANGE)
-            self.pet_bar.fill(ORANGE)
-
-        print('Time: {}; Pet speed: {:.2f} vs {:.2f} Purr: {:.2f}, '
-              'Grrr: {:.2f}, Yawn: {:.2f}'.format(
-                  self.petting_time, pet_speed, self.desired_pet_speed,
-                  self.pet_score, self.grrr_score, self.yawn_score))
-
-        # or if tiger gets too bored or too annoyed
-        if self.petting_time <= 0:
-            result = PURR
-        elif self.yawn_score >= YAWN_GRRR_MAX:
-            result = YAWN
-        elif self.grrr_score >= YAWN_GRRR_MAX:
-            result = GRRR
-        else:
-            result = None
-        if result:
-            self.petted = True
-            self.pos = OFFSCREEN
-        return result
 
 
 class MessageScreen(object):
@@ -541,14 +479,115 @@ class MessageScreen(object):
 
 
 class TigerManager(object):
-    def __init__(self):
-        pass
+    def __init__(self, tile_matrix):
+        tiger_pics = [load_image(pic) for pic in get_file_paths(TIGER_PICS_PATH)]
+        self.tigers = [Tiger(pic) for pic in tiger_pics]
+        self.pet_text = Text('', DEFAULT_FONT, ORANGE, PET_TEXT_HEIGHT,
+                             pos=PET_TEXT_CENTER, alignment=CENTER)
+        self.pet_bar = ImgObj(height=PET_BAR_HEIGHT,
+                              pos=PET_BAR_CENTER, alignment=CENTER)
+        self.reset()
 
-    def __iter__(self):
-        pass
+    def __str__(self):
+        return 'Tigers:\n{}'.format('\n'.join(self.tigers))
 
-    def __next__(self):
-        pass
+    def reset(self):
+        self.tiger_to_pet = None
+        self.last_pet_pos = None
+        self.distances = []  # give it a better starting list of distances
+        self.pet_score = 0
+        self.yawn_score = 0
+        self.grrr_score = 0
+        self.petting_time = PETTING_TIME
+
+    def pet(self, mousedown, mouse_pos):
+        result = self.process_pet(self.tiger_to_pet, mousedown, mouse_pos)
+        if result:
+            self.tiger_to_pet.petted = True
+            self.tiger_to_pet.pos = OFFSCREEN
+            self.reset()
+        return result
+
+    def process_pet(self, tiger, mousedown, mouse_pos):
+        self.petting_time -= 1
+        if mousedown:
+            dist = distance(self.last_pet_pos, mouse_pos)
+            self.last_pet_pos = mouse_pos
+        else:
+            dist = 0
+            self.last_pet_pos = None
+
+        self.distances.insert(0, dist)
+        if len(self.distances) > NUM_PETS:
+            self.distances.pop()
+
+        pet_speed = sum(self.distances) / len(self.distances)
+        self.pet_bar.width = pet_speed * PET_BAR_MOD
+        self.pet_bar.pos = PET_BAR_CENTER
+
+        if pet_speed >= tiger.too_fast:
+            self.grrr_score += abs(pet_speed - tiger.too_fast)
+            self.pet_text.update(pos=PET_TEXT_CENTER, string=GRRR, color=RED)
+            self.pet_bar.fill(RED)
+        elif pet_speed <= tiger.too_slow:
+            self.yawn_score += abs(pet_speed - tiger.too_slow)
+            self.pet_text.update(pos=PET_TEXT_CENTER, string=YAWN,
+                                 color=YELLOW)
+            self.pet_bar.fill(YELLOW)
+        else:
+            # the score is higher closer to desired speed
+            self.pet_score += 1 / abs(pet_speed - tiger.desired_pet_speed)
+            self.pet_text.update(pos=PET_TEXT_CENTER, string=PURR,
+                                 color=ORANGE)
+            self.pet_bar.fill(ORANGE)
+
+        print('Time: {}; Pet speed: {:.2f} vs {:.2f} Purr: {:.2f}, '
+              'Grrr: {:.2f}, Yawn: {:.2f}'.format(
+                  self.petting_time, pet_speed, tiger.desired_pet_speed,
+                  self.pet_score, self.grrr_score, self.yawn_score))
+
+        # or if tiger gets too bored or too annoyed
+        if self.petting_time <= 0:
+            return PURR
+        elif self.yawn_score >= YAWN_GRRR_MAX:
+            return YAWN
+        elif self.grrr_score >= YAWN_GRRR_MAX:
+            return GRRR
+        return None
+
+    def tigers_to_pet(self):
+        for tiger in self.tigers:
+            if not tiger.petted:
+                yield tiger
+
+    def collide(self, player):
+        # should check if collide with player, not center pos
+        for tiger in self.tigers:
+            if tiger.collide_pos(CENTER_FRAME_POS):
+                self.tiger_to_pet = tiger
+                return True
+        return False
+
+    def move(self, direction, tile_matrix):
+        for tiger in self.tigers:
+            tiger.move(direction)
+        # if tiger has been "stranded" by the tile matrix re-drawing itself
+            if not tiger.collide_rect(tile_matrix.rect):
+                # find a new home tile for the tiger
+                # it will essentially teleport across the map to the leading edge
+                tiles = tile_matrix.get_tiles_for_tigers(
+                    self.tigers_to_pet(), direction)
+                if tiles:
+                    tiger.pos = random.choice(tiles).random_pos()
+
+    def draw_petting(self, surface):
+        self.tiger_to_pet.draw_picture(surface)
+        self.pet_bar.draw(surface)
+        self.pet_text.draw(surface)
+
+    def draw(self, surface):
+        for tiger in self.tigers_to_pet():
+            tiger.draw(surface)
 
 
 class GameState(object):
@@ -556,15 +595,15 @@ class GameState(object):
     Master game state, containing current player action, tile map, game
     objects on map, and any messages to display between modes.
     '''
-
     def __init__(self, matrix_size):
         self.mode = MESSAGE
         self.message_screen = MessageScreen(GAME_START_MESSAGES, self.start_walking)
         self.tile_matrix = TileMatrix(matrix_size,
                                       pos=init_matrix_pos(matrix_size))
-        self.tigers = self.init_tigers()
-        self.tiger_to_pet = None
+        self.tigers = TigerManager(self.tile_matrix)
         self.player = Player(pos=CENTER_FRAME_POS)
+        self.direction = None
+        self.mousedown = False
 
     def __str__(self):
         return '''
@@ -573,38 +612,20 @@ class GameState(object):
         {}
         '''.format(self.mode, self.tile_matrix, self.message_screen)
 
-    # move to TigerManager object __init__
-    def init_tigers(self):
-        tigers = []
-        tiger_pics = [load_image(pic) for pic in get_file_paths(TIGER_PICS_PATH)]
-        tiles = self.tile_matrix.get_tiles_for_tigers()
-        print('{} tiger pics, {} tiles'.format(len(tiger_pics), len(tiles)))
-        for pic in tiger_pics:
-            try:
-                tile = tiles.pop()
-                pos = tile.random_pos()
-                tigers.append(Tiger(pic, pos=pos))
-            except IndexError:
-                pass
-        return tigers
-
-    def tigers_to_pet(self):
-        return [tiger for tiger in self.tigers if not tiger.petted]
+    def reset(self):
+        self.direction = None
+        self.mousedown = False
+        self.message_screen = None
 
     def start_petting(self):
         print('start_petting')
         self.mode = PETTING
-        self.direction = None
-        self.mousedown = False
-        self.message_screen = None
+        self.reset()
 
     def start_walking(self):
         print('start_walking')
         self.mode = WALKING
-        self.direction = None
-        self.tiger_to_pet = None
-        self.mousedown = False
-        self.message_screen = None
+        self.reset()
 
     def process_event(self, event):
         keyup, keydown = None, None
@@ -628,36 +649,22 @@ class GameState(object):
 
     def move(self, direction):
         if self.mode == WALKING:
-            self.tile_matrix.move(direction)
-
-            # move this stuff to TigerManager
-            for tiger in self.tigers_to_pet():
-                tiger.move(direction)
-                # should check if collide with player, not center pos
-                if tiger.collide_pos(CENTER_FRAME_POS):
-                    self.tiger_to_pet = tiger
-                    self.mode = MESSAGE
-                    self.message_screen = MessageScreen(BEFORE_PET_MESSAGES,
-                                                        self.start_petting)
-                # if tiger has been "stranded" by the tile matrix re-drawing itself
-                if not tiger.collide_rect(self.tile_matrix.rect):
-                    # find a new home tile for the tiger
-                    # it will essentially teleport across the map to the leading edge
-                    tiles = self.tile_matrix.get_tiles_for_tigers(
-                        self.tigers_to_pet(), direction)
-                    if tiles:
-                        tiger.pos = random.choice(tiles).random_pos()
+            self.tile_matrix.move(direction)  # reverse
+            self.tigers.move(direction, self.tile_matrix)  # reverse
+            if self.tigers.collide(self.player):  # move to Player obj rect
+                self.mode = MESSAGE
+                self.message_screen = MessageScreen(BEFORE_PET_MESSAGES,
+                                                    self.start_petting)
 
     def draw(self, surface):
         if self.mode == MESSAGE:
             self.message_screen.draw(surface)
         elif self.mode == WALKING:
             self.tile_matrix.draw(surface)
-            for tiger in self.tigers_to_pet():
-                tiger.draw(surface)
+            self.tigers.draw(surface)
             self.player.draw(surface)
         elif self.mode == PETTING:
-            self.tiger_to_pet.draw_petting(surface)
+            self.tigers.draw_petting(surface)
 
     def update(self):
         # print(self)
@@ -665,11 +672,8 @@ class GameState(object):
             self.message_screen.update()
         if self.mode == WALKING and self.direction:
             self.move(self.direction)
-        if self.mode == PETTING and self.tiger_to_pet:
-
-            # move this stuff to TigerManager object
-            result = self.tiger_to_pet.process_pet(
-                self.mousedown, pygame.mouse.get_pos())
+        if self.mode == PETTING:
+            result = self.tigers.pet(self.mousedown, pygame.mouse.get_pos())
             if result:
                 self.mode = MESSAGE
                 self.message_screen = MessageScreen(
