@@ -482,6 +482,14 @@ class TigerManager(object):
     def __init__(self, tile_matrix):
         tiger_pics = [load_image(pic) for pic in get_file_paths(TIGER_PICS_PATH)]
         self.tigers = [Tiger(pic) for pic in tiger_pics]
+        tiles = tile_matrix.get_tiles_for_tigers(self.tigers)
+        for tiger in self.tigers:
+            try:
+                tile = tiles.pop()
+                tiger.pos = tile.random_pos()
+            except IndexError:
+                pass
+
         self.pet_text = Text('', DEFAULT_FONT, ORANGE, PET_TEXT_HEIGHT,
                              pos=PET_TEXT_CENTER, alignment=CENTER)
         self.pet_bar = ImgObj(height=PET_BAR_HEIGHT,
