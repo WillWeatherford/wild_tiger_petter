@@ -23,9 +23,9 @@ Tiger Petting
 
 
 MEssage screens with key input instead of timer
-Start screen
-Instructions screen
-GameOver screen
+    Start screen
+    Instructions screen
+    GameOver screen
 
 Move stuff around
 add docstring to every class and function
