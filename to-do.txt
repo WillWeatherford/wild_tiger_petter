@@ -1,9 +1,11 @@
 
 movement keys are sticky, need to fix
 use list of movement keys instead of booleans
+Fix message screen transitions with proper key mappings
 animated player sprite
 
-Make TileMatrix to be a iterable
+Make TileMatrix to be a iterable?
+tiles referenced by their matrix x/y values?
 
 Tigers on Map
     populate "ROAR" text messages on map for off-screen tigers
@@ -13,13 +15,6 @@ Tiger Petting
     scale picture to frame
     set petting boxes for each tiger individually
     fix center of pet feedback bar
-    fix "yawn" at bar size = 0
+    fix "yawn" at bar size = 
 
-
-MEssage screens with key input instead of timer
-    Start screen
-    Instructions screen
-    GameOver screen
-
-Move stuff around
 add docstring to every class and function

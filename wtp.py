@@ -22,17 +22,13 @@ DOWN = pgl.K_DOWN
 RIGHT = pgl.K_RIGHT
 LEFT = pgl.K_LEFT
 
-DIRECTIONS = {UP: (0, -1),
-              RIGHT: (1, 0),
-              LEFT: (-1, 0),
-              DOWN: (0, 1)}
-
-
-CENTER = 'center'
-CENTER_CENTER = 'center center'
-
+HELP_KEY = pgl.K_h
 
 MOVE_SPEED = 1
+DIRECTIONS = {UP: (0, -MOVE_SPEED),
+              RIGHT: (MOVE_SPEED, 0),
+              LEFT: (-MOVE_SPEED, 0),
+              DOWN: (0, MOVE_SPEED)}
 
 BLACK  = (  0,   0,   0)
 WHITE  = (255, 255, 255)
@@ -83,9 +79,19 @@ MESSAGE_LINE_SPACING = 20
 TOPLEFT = 'topleft'
 CENTER = 'center'
 
-GAME_START_MESSAGES = [
+
+START_MENU_MESSAGES = [
     'Welcome to',
     'WILD TIGER PETTER',
+]
+HELP_MESSAGES = [
+    'Click, hold and drag the mouse button to pet.',
+    'Pet the tiger where it wants to be petted.',
+    "Don't pet too fast, or the tiger will get angry.",
+    "Don't pet too slow, or the tiger will get bored.",
+    'Pet the tiger until it is happy!'
+]
+NEW_GAME_MESSAGES = [
     'How about a nice walk in the jungle...',
     'But could there be any wild tigers about?'
 ]
@@ -108,6 +114,10 @@ YAWN_MESSAGES = [
 GAME_OVER_MESSAGES = [
     'Game Over.',
     'Congratulations!'
+]
+CONTINUE_MESSAGES = [
+    'Press "H" at any time for help.',
+    'Click or press any other button to continue.'
 ]
 
 PET_FEEDBACK = {
@@ -337,13 +347,13 @@ class MessageScreen(object):
     '''
     def __init__(self, messages, next_mode_func, alignment=CENTER):
         self.next_mode_func = next_mode_func
-        self.time = MESSAGE_SCREEN_TIME
 
         if alignment == TOPLEFT:
             x = 100
         elif alignment == CENTER:
             x = CENTER_FRAME_X
 
+        messages.extend(CONTINUE_MESSAGES)
         self.messages = [
             Text(m, DEFAULT_FONT, ORANGE, MESSAGE_FONT_HEIGHT,
                  pos=(x, (i + 1) * (FRAME_HEIGHT / (len(messages) + 1))),
@@ -351,13 +361,11 @@ class MessageScreen(object):
             for i, m in enumerate(messages)]
 
     def __str__(self):
-        return 'MessageScreen: time remaining: {}\n{}'.format(
-            self.time,
+        return 'MessageScreen:\n{}'.format(
             '\n'.join([str(m) for m in self.messages]))
 
-    def update(self):
-        self.time -= 1
-        if self.time <= 0:
+    def update(self, mousedown):
+        if mousedown:
             self.next_mode_func()
 
     def draw(self, surface):
@@ -571,10 +579,10 @@ class TigerManager(object):
                                  color=ORANGE)
             self.pet_bar.fill(ORANGE)
 
-        print('Time: {}; Pet speed: {:.2f} vs {:.2f} Purr: {:.2f}, '
-              'Grrr: {:.2f}, Yawn: {:.2f}'.format(
-                  self.petting_time, pet_speed, tiger.desired_pet_speed,
-                  self.pet_score, self.grrr_score, self.yawn_score))
+        # print('Time: {}; Pet speed: {:.2f} vs {:.2f} Purr: {:.2f}, '
+        #       'Grrr: {:.2f}, Yawn: {:.2f}'.format(
+        #           self.petting_time, pet_speed, tiger.desired_pet_speed,
+        #           self.pet_score, self.grrr_score, self.yawn_score))
 
         # or if tiger gets too bored or too annoyed
         if self.petting_time <= 0:
@@ -618,7 +626,7 @@ class GameState(object):
     '''
     def __init__(self, matrix_size):
         self.mode = MESSAGE
-        self.message_screen = MessageScreen(GAME_START_MESSAGES, self.start_walking)
+        self.message_screen = MessageScreen(START_MENU_MESSAGES, self.start_game)
         self.tigers = TigerManager()
         self.tile_matrix = TileMatrix(matrix_size, self.tigers.tigers_to_pet(),
                                       pos=init_matrix_pos(matrix_size))
@@ -637,6 +645,18 @@ class GameState(object):
         self.direction = None
         self.mousedown = False
         self.message_screen = None
+
+    def help_me(self):
+        self.mode = MESSAGE
+        # need to change this to call back to previous message screen
+        # maybe use a "next mode" attribute
+        self.message_screen = MessageScreen(HELP_MESSAGES,
+                                            self.start_walking)
+
+    def start_game(self):
+        self.mode = MESSAGE
+        self.message_screen = MessageScreen(NEW_GAME_MESSAGES,
+                                            self.start_walking)
 
     def start_petting(self):
         print('start_petting')
@@ -657,16 +677,16 @@ class GameState(object):
         if event.type == pgl.QUIT or keydown == pgl.K_ESCAPE:
             self.quit()
 
+        if event.type == pgl.MOUSEBUTTONDOWN:
+            self.mousedown = True
+        elif event.type == pgl.MOUSEBUTTONUP:
+            self.mousedown = False
+
         if self.mode == WALKING:
             if keydown:
                 self.direction = DIRECTIONS.get(keydown, None)
             if keyup and self.direction in DIRECTIONS.values():
                 self.direction = None
-        elif self.mode == PETTING:
-            if event.type == pgl.MOUSEBUTTONDOWN:
-                self.mousedown = True
-            elif event.type == pgl.MOUSEBUTTONUP:
-                self.mousedown = False
 
     def move(self, direction):
         if self.mode == WALKING:
@@ -690,18 +710,23 @@ class GameState(object):
     def update(self):
         # print(self)
         if self.mode == MESSAGE and self.message_screen:
-            self.message_screen.update()
+            self.message_screen.update(self.mousedown)
         if self.mode == WALKING and self.direction:
             self.move(self.direction)
         if self.mode == PETTING:
             result = self.tigers.pet(self.mousedown, pygame.mouse.get_pos())
+            print('Petting result: {}'.format(result))
             if result:
                 self.mode = MESSAGE
                 self.message_screen = MessageScreen(
                     PET_FEEDBACK[result],
                     self.start_walking)
-        # if not self.tigers_to_pet():
-        #     self.mode = GAME_OVER
+        if not self.tigers.tigers_to_pet():
+            self.mode = MESSAGE
+            self.message_screen = MessageScreen(GAME_OVER_MESSAGES, self.game_over)
+
+    def game_over(self):
+        pass
 
     def quit(self):
         pygame.quit()
