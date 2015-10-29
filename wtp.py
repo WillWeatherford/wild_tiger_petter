@@ -540,6 +540,17 @@ class MessageScreen(object):
             m.draw(surface)
 
 
+class TigerManager(object):
+    def __init__(self):
+        pass
+
+    def __iter__(self):
+        pass
+
+    def __next__(self):
+        pass
+
+
 class GameState(object):
     '''
     Master game state, containing current player action, tile map, game
