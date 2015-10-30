@@ -1,7 +1,8 @@
 also use an "old direction" to help with resetting sprites when movign
 
 pygame.mouse.set_cursor
-set the look of the mouse
+set the look of the mouse - hand for petting!
+don't show mouse during walkies
 
 Fix message screen transitions with proper key mappings
 animated player sprite

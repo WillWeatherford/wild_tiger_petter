@@ -21,14 +21,23 @@ UP = pg.K_UP
 DOWN = pg.K_DOWN
 RIGHT = pg.K_RIGHT
 LEFT = pg.K_LEFT
+W = pg.K_w
+A = pg.K_a
+S = pg.K_s
+D = pg.K_d
 
-HELP_KEY = pg.K_h
+H = pg.K_h
+SPACE = pg.K_SPACE
 
 MOVE_SPEED = 1
 DIRECTIONS = {UP: (0, -MOVE_SPEED),
+              W: (0, -MOVE_SPEED),
               RIGHT: (MOVE_SPEED, 0),
+              D: (MOVE_SPEED, 0),
               LEFT: (-MOVE_SPEED, 0),
-              DOWN: (0, MOVE_SPEED)}
+              A: (-MOVE_SPEED, 0),
+              DOWN: (0, MOVE_SPEED),
+              S: (0, MOVE_SPEED)}
 
 BLACK  = (  0,   0,   0)
 WHITE  = (255, 255, 255)
@@ -117,7 +126,7 @@ GAME_OVER_MESSAGES = [
 ]
 CONTINUE_MESSAGES = [
     'Press "H" at any time for help.',
-    'Click or press any other button to continue.'
+    'Press "Space" to continue.'
 ]
 
 PET_FEEDBACK = {
@@ -363,8 +372,8 @@ class MessageScreen(object):
         return 'MessageScreen:\n{}'.format(
             '\n'.join([str(m) for m in self.messages]))
 
-    def update(self, mouse, keys):
-        if any(mouse.get_pressed()) or any(keys):
+    def update(self, keys):
+        if keys[SPACE]:
             self.next_mode_func()
 
     def draw(self, surface):
@@ -709,21 +718,21 @@ class GameState(object):
 
     def update(self):
         if self.mode == MESSAGE and self.message_screen:
-            self.message_screen.update(self.mouse, self.keys)
+            self.message_screen.update(self.keys)
         if self.mode == WALKING and self.direction:
             self.move(self.direction)
         if self.mode == PETTING:
             result = self.tigers.pet(self.mouse)
             print('Petting result: {}'.format(result))
             if result:
-                # self.mousedown = False  # need a more elegant way of solving this
                 self.mode = MESSAGE
                 self.message_screen = MessageScreen(
                     PET_FEEDBACK[result],
                     self.start_walking)
         if not self.tigers.tigers_to_pet():
             self.mode = MESSAGE
-            self.message_screen = MessageScreen(GAME_OVER_MESSAGES, self.game_over)
+            self.message_screen = MessageScreen(GAME_OVER_MESSAGES,
+                                                self.game_over)
 
     def game_over(self):
         pass
