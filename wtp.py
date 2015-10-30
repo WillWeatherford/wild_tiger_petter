@@ -352,8 +352,7 @@ class MessageScreen(object):
             x = 100
         elif alignment == CENTER:
             x = CENTER_FRAME_X
-
-        messages.extend(CONTINUE_MESSAGES)
+        messages = list(messages) + CONTINUE_MESSAGES
         self.messages = [
             Text(m, DEFAULT_FONT, ORANGE, MESSAGE_FONT_HEIGHT,
                  pos=(x, (i + 1) * (FRAME_HEIGHT / (len(messages) + 1))),
@@ -717,6 +716,7 @@ class GameState(object):
             result = self.tigers.pet(self.mousedown, pygame.mouse.get_pos())
             print('Petting result: {}'.format(result))
             if result:
+                self.mousedown = False  # need a more elegant way of solving this
                 self.mode = MESSAGE
                 self.message_screen = MessageScreen(
                     PET_FEEDBACK[result],
@@ -737,7 +737,7 @@ def main():
 
     # initialize
 
-    game_state = GameState(3)
+    game_state = GameState(5)
     print(str(game_state))
 
     while True:
