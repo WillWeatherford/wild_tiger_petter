@@ -4,8 +4,7 @@ pygame.mouse.set_cursor
 set the look of the mouse - hand for petting!
 don't show mouse during walkies
 
-Fix message screen transitions with proper key mappings
-animated player sprite
+Fix message screen transitions with slight dely between keypresses... or use keyup
 
 Make TileMatrix to be a iterable?
 tiles referenced by their matrix x/y values?

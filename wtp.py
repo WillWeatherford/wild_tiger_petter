@@ -57,6 +57,8 @@ YELLOW = (255, 255,   0)
 FPS = 30  # frames per second setting
 fps_clock = pg.time.Clock()
 
+PLAYER_ANIM_RATE = 6
+
 FRAME_WIDTH, FRAME_HEIGHT = 800, 600
 CENTER_FRAME_X = FRAME_WIDTH / 2
 CENTER_FRAME_Y = FRAME_HEIGHT / 2
@@ -176,8 +178,9 @@ def get_player_images():
     filename = os.path.join(SPRITES_PATH, PLAYER_SPRITES_FILENAME)
     image = load_image(filename)
     image.set_colorkey(WHITE)
+    print([x for x in range(0, image.get_width(), PLAYER_W)])
     return [image.subsurface(x, 0, PLAYER_H, PLAYER_W)
-            for x in range(image.get_width() / PLAYER_W)]
+            for x in range(0, image.get_width(), PLAYER_W)]
 ##########################################
 # other utils
 
@@ -330,6 +333,8 @@ class ImgObj(pg.sprite.Sprite):
         return self.rect.collidepoint(pos)
 
     def collide_rect(self, rect):
+        if isinstance(rect, ImgObj):
+            rect = rect.rect
         return self.rect.colliderect(rect)
 
     def fill(self, color):
@@ -395,21 +400,52 @@ class MessageScreen(object):
             m.draw(surface)
 
 
+class Animator(object):
+    def __init__(self, frames):
+        self.frames = frames
+        self.last_i = len(frames) - 1
+        self.current_i = -1
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        if self.current_i >= self.last_i:
+            self.reset()
+        self.current_i += 1
+        return self.frames[self.current_i]
+
+    def next(self):
+        return self.__next__()
+
+    def reset(self):
+        self.current_i = -1
+
+
 class Player(ImgObj):
     def __init__(self, *args, **kwargs):
         self.frames = get_player_images()
-        # self.moving_frames = {
-        #     d: [f for f in self.frames] for d in (90, 180, 270, 0)
-        # }
-
+        self.anim_counter = 0
+        self.direction = LEFT
         self.moving_frames = {
-            di: [pg.transform.rotate(f, de) for f in self.frames]
+            di: Animator([pg.transform.rotate(f, de) for f in self.frames])
             for di, de in DI_DE.items()}
 
         super(Player, self).__init__(image=self.frames[0], *args, **kwargs)
 
     def move(self, direction):
-        self.image = self.moving_frames[direction][0]
+        if direction:
+            self.direction = direction
+            self.anim_counter += 1
+        else:
+            self.anim_counter = 0
+            self.moving_frames[self.direction].reset()
+
+        # fix
+
+        if self.anim_counter > PLAYER_ANIM_RATE:
+            self.image = self.moving_frames[self.direction].next()
+            self.anim_counter = 0
 
 
 class Tile(ImgObj):
@@ -630,9 +666,8 @@ class TigerManager(object):
         return [tiger for tiger in self.tigers if not tiger.petted]
 
     def collide(self, player):
-        # should check if collide with player, not center pos
         for tiger in self.tigers:
-            if tiger.collide_pos(CENTER_FRAME_POS):
+            if tiger.collide_rect(player):
                 self.tiger_to_pet = tiger
                 return True
         return False
@@ -768,7 +803,7 @@ class GameState(object):
 
 def main():
 
-    # initialize
+    # initialize size from sysargv
 
     game_state = GameState(3)
     print(str(game_state))
