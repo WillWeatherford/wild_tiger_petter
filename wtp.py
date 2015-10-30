@@ -1,10 +1,10 @@
 import os
 import sys
 import math
-import pygame
+import pygame as pg
 import random
-pygame.init()
-import pygame.locals as pgl
+pg.init()
+
 #########################
 # GLOBAL CONSTANTS
 
@@ -17,12 +17,12 @@ OFFSCREEN = (-2000, -2000)
 
 DEFAULT_FONT = 'arial'
 
-UP = pgl.K_UP
-DOWN = pgl.K_DOWN
-RIGHT = pgl.K_RIGHT
-LEFT = pgl.K_LEFT
+UP = pg.K_UP
+DOWN = pg.K_DOWN
+RIGHT = pg.K_RIGHT
+LEFT = pg.K_LEFT
 
-HELP_KEY = pgl.K_h
+HELP_KEY = pg.K_h
 
 MOVE_SPEED = 1
 DIRECTIONS = {UP: (0, -MOVE_SPEED),
@@ -39,13 +39,13 @@ ORANGE = (255, 140,   0)
 YELLOW = (255, 255,   0)
 
 FPS = 30  # frames per second setting
-fps_clock = pygame.time.Clock()
+fps_clock = pg.time.Clock()
 
 FRAME_WIDTH, FRAME_HEIGHT = 800, 600
 CENTER_FRAME_X = FRAME_WIDTH / 2
 CENTER_FRAME_Y = FRAME_HEIGHT / 2
 CENTER_FRAME_POS = (CENTER_FRAME_X, CENTER_FRAME_Y)
-FRAME = pygame.display.set_mode((FRAME_WIDTH, FRAME_HEIGHT))
+FRAME = pg.display.set_mode((FRAME_WIDTH, FRAME_HEIGHT))
 
 TILES_PATH = './tiles'
 SPRITES_PATH = './sprites'
@@ -137,13 +137,13 @@ def get_file_paths(root):
 
 
 def load_image(filename):
-    return pygame.image.load(filename).convert()
+    return pg.image.load(filename).convert()
 
 
 def load_rand_tile():
     filename = random.choice(get_file_paths(TILES_PATH))
     tile = load_image(filename)
-    return pygame.transform.rotate(tile, random.choice(DEGREES))
+    return pg.transform.rotate(tile, random.choice(DEGREES))
 
 
 # will need to convert this into a general sprite getting function
@@ -152,7 +152,7 @@ def get_tiger_sprite():
     image = load_image(filename)
     image.set_colorkey(WHITE)
     subsurface = image.subsurface((0, 0, TIGER_W, TIGER_H))
-    return pygame.transform.rotate(subsurface, random.choice(DEGREES))
+    return pg.transform.rotate(subsurface, random.choice(DEGREES))
 
 
 ##########################################
@@ -216,17 +216,17 @@ def mirror_direction(direction):
 #######################################################
 
 
-class ImgObj(pygame.sprite.Sprite):
+class ImgObj(pg.sprite.Sprite):
     def __init__(self, pos=OFFSCREEN, image=None,
                  width=0, height=0, alignment=TOPLEFT):
-        pygame.sprite.Sprite.__init__(self)
+        pg.sprite.Sprite.__init__(self)
         self.alignment = alignment
         if image:
             self.image = image
             self.rect = self.image.get_rect()
         else:
-            self.image = pygame.Surface((width, height))
-            self.rect = pygame.Rect(pos, (width, height))
+            self.image = pg.Surface((width, height))
+            self.rect = pg.Rect(pos, (width, height))
         self.pos = pos
 
     def __str__(self):
@@ -310,7 +310,7 @@ class ImgObj(pygame.sprite.Sprite):
         return self.rect.colliderect(rect)
 
     def fill(self, color):
-        self.image = pygame.Surface((self.width, self.height))
+        self.image = pg.Surface((self.width, self.height))
         self.image.fill(color, rect=self.rect)
 
     def draw(self, surface):
@@ -322,7 +322,7 @@ class Text(ImgObj):
         self.string = string
         self.font_name = font_name
         self.color = color
-        self.font = pygame.font.SysFont(font_name, height)
+        self.font = pg.font.SysFont(font_name, height)
         image = self.font.render(string, True, color)
         super(Text, self).__init__(*args, image=image, **kwargs)
 
@@ -377,7 +377,7 @@ class Player(ImgObj):
         super(Player, self).__init__(*args, **kwargs)
 
     def draw(self, surface):
-        self.image = pygame.draw.circle(surface, RED, self.pos, 10)
+        self.image = pg.draw.circle(surface, RED, self.pos, 10)
 
 
 class Tile(ImgObj):
@@ -630,6 +630,7 @@ class GameState(object):
         self.tile_matrix = TileMatrix(matrix_size, self.tigers.tigers_to_pet(),
                                       pos=init_matrix_pos(matrix_size))
         self.player = Player(pos=CENTER_FRAME_POS)
+        self.direction_stack = []
         self.direction = None
         self.mousedown = False
 
@@ -667,25 +668,51 @@ class GameState(object):
         self.mode = WALKING
         self.reset()
 
-    def process_event(self, event):
-        keyup, keydown = None, None
-        if event.type == pgl.KEYUP:
-            keyup = event.key or None
-        elif event.type == pgl.KEYDOWN:
-            keydown = event.key or None
-        if event.type == pgl.QUIT or keydown == pgl.K_ESCAPE:
-            self.quit()
+    def add_direction(self, direction):
+        '''
+        Add a pressed direction key on the direction stack.
+        '''
 
-        if event.type == pgl.MOUSEBUTTONDOWN:
-            self.mousedown = True
-        elif event.type == pgl.MOUSEBUTTONUP:
-            self.mousedown = False
 
-        if self.mode == WALKING:
-            if keydown:
-                self.direction = DIRECTIONS.get(keydown, None)
-            if keyup and self.direction in DIRECTIONS.values():
-                self.direction = None
+        self.direction = self.direction_stack[-1]
+
+    def pop_direction(self, direction):
+        '''
+        Pop a released key from the direction stack.
+        '''
+
+        if self.direction_stack:
+            self.direction = self.direction_stack[-1]
+
+    def process_events(self, events, keys):
+        '''
+        Assign key and mouse events to self attributes keeping track
+        of movements, etc.
+        '''
+        for event in events:
+            self.keys = keys
+            if event.type == pg.QUIT or self.keys[pg.K_ESCAPE]:
+                self.quit()
+
+            elif hasattr(event, 'key') and event.key in DIRECTIONS.keys():
+                direction = DIRECTIONS[event.key]
+                # if direction in self.direction_stack:
+                #     self.direction_stack.remove(direction)
+
+                if event.type == pg.KEYDOWN:
+                    self.direction_stack.append(direction)
+                if event.type == pg.KEYUP:
+                    if direction in self.direction_stack:
+                        self.direction_stack.remove(direction)
+                if self.direction_stack:
+                    self.direction = self.direction_stack[-1]
+                else:
+                    self.direction = None
+
+            if event.type == pg.MOUSEBUTTONDOWN:
+                self.mousedown = True
+            elif event.type == pg.MOUSEBUTTONUP:
+                self.mousedown = False
 
     def move(self, direction):
         if self.mode == WALKING:
@@ -707,13 +734,12 @@ class GameState(object):
             self.tigers.draw_petting(surface)
 
     def update(self):
-        # print(self)
         if self.mode == MESSAGE and self.message_screen:
             self.message_screen.update(self.mousedown)
         if self.mode == WALKING and self.direction:
             self.move(self.direction)
         if self.mode == PETTING:
-            result = self.tigers.pet(self.mousedown, pygame.mouse.get_pos())
+            result = self.tigers.pet(self.mousedown, pg.mouse.get_pos())
             print('Petting result: {}'.format(result))
             if result:
                 self.mousedown = False  # need a more elegant way of solving this
@@ -729,7 +755,7 @@ class GameState(object):
         pass
 
     def quit(self):
-        pygame.quit()
+        pg.quit()
         sys.exit()
 
 
@@ -737,17 +763,17 @@ def main():
 
     # initialize
 
-    game_state = GameState(5)
+    game_state = GameState(3)
     print(str(game_state))
 
     while True:
         FRAME.fill(BLACK)
-        events = pygame.event.get()
-        if events:
-            game_state.process_event(events[0])
+        events = pg.event.get()
+        keys = pg.key.get_pressed()
+        game_state.process_events(events, keys)
         game_state.update()
         game_state.draw(FRAME)
-        pygame.display.update()
+        pg.display.update()
         fps_clock.tick(FPS)
 
 if __name__ == '__main__':

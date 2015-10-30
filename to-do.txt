@@ -1,38 +1,3 @@
-
-movement keys are sticky, need to fix
-
-
-use list of movement keys instead of booleans:
-
-
-    def event_loop(self):
-        """Add/pop directions from player's direction stack as necessary."""
-        for event in pg.event.get():
-            self.keys = pg.key.get_pressed()
-            if event.type == pg.QUIT or self.keys[pg.K_ESCAPE]:
-                self.done = True
-            elif event.type == pg.KEYDOWN:
-                self.player.add_direction(event.key)
-            elif event.type == pg.KEYUP:
-                self.player.pop_direction(event.key)
-
-    def add_direction(self, key):
-        """Add a pressed direction key on the direction stack."""
-        if key in DIRECT_DICT:
-            if key in self.direction_stack:
-                self.direction_stack.remove(key)
-            self.direction_stack.append(key)
-            self.direction = self.direction_stack[-1]
-
-    def pop_direction(self, key):
-        """Pop a released key from the direction stack."""
-        if key in DIRECT_DICT:
-            if key in self.direction_stack:
-                self.direction_stack.remove(key)
-            if self.direction_stack:
-                self.direction = self.direction_stack[-1]
-
-
 also use an "old direction" to help with resetting sprites when movign
 
 
