@@ -30,14 +30,21 @@ H = pg.K_h
 SPACE = pg.K_SPACE
 
 MOVE_SPEED = 1
-DIRECTIONS = {UP: (0, -MOVE_SPEED),
-              W: (0, -MOVE_SPEED),
+DIRECTIONS = {LEFT: (-MOVE_SPEED, 0),
+              UP: (0, -MOVE_SPEED),
               RIGHT: (MOVE_SPEED, 0),
-              D: (MOVE_SPEED, 0),
-              LEFT: (-MOVE_SPEED, 0),
-              A: (-MOVE_SPEED, 0),
               DOWN: (0, MOVE_SPEED),
+              A: (-MOVE_SPEED, 0),
+              W: (0, -MOVE_SPEED),
+              D: (MOVE_SPEED, 0),
               S: (0, MOVE_SPEED)}
+
+DEGREES = (0.0, 90.0, 180.0, 270.0)
+
+DI_DE = {DIRECTIONS[LEFT]: 0.0,
+         DIRECTIONS[UP]: 270.0,
+         DIRECTIONS[RIGHT]: 180.0,
+         DIRECTIONS[DOWN]: 90.0}
 
 BLACK  = (  0,   0,   0)
 WHITE  = (255, 255, 255)
@@ -60,10 +67,11 @@ TILES_PATH = './tiles'
 SPRITES_PATH = './sprites'
 TIGER_PICS_PATH = './tiger_pics'
 TIGER_SPRITES_FILENAME = 'tiger_sprites.png'
+PLAYER_SPRITES_FILENAME = 'walker2.png'
 TILE_SIZE = 200
-DEGREES = [0, 90, 180, 270]
 
 TIGER_W, TIGER_H = 19, 51
+PLAYER_H, PLAYER_W = 20, 20
 
 MIN_PET_SPEED, MAX_PET_SPEED = 5, 10
 TOO_FAST_MOD, TOO_SLOW_MOD = 1.4, 1.4
@@ -164,6 +172,12 @@ def get_tiger_sprite():
     return pg.transform.rotate(subsurface, random.choice(DEGREES))
 
 
+def get_player_images():
+    filename = os.path.join(SPRITES_PATH, PLAYER_SPRITES_FILENAME)
+    image = load_image(filename)
+    image.set_colorkey(WHITE)
+    return [image.subsurface(x, 0, PLAYER_H, PLAYER_W)
+            for x in range(image.get_width() / PLAYER_W)]
 ##########################################
 # other utils
 
@@ -383,10 +397,19 @@ class MessageScreen(object):
 
 class Player(ImgObj):
     def __init__(self, *args, **kwargs):
-        super(Player, self).__init__(*args, **kwargs)
+        self.frames = get_player_images()
+        # self.moving_frames = {
+        #     d: [f for f in self.frames] for d in (90, 180, 270, 0)
+        # }
 
-    def draw(self, surface):
-        self.image = pg.draw.circle(surface, RED, self.pos, 10)
+        self.moving_frames = {
+            di: [pg.transform.rotate(f, de) for f in self.frames]
+            for di, de in DI_DE.items()}
+
+        super(Player, self).__init__(image=self.frames[0], *args, **kwargs)
+
+    def move(self, direction):
+        self.image = self.moving_frames[direction][0]
 
 
 class Tile(ImgObj):
@@ -699,6 +722,7 @@ class GameState(object):
 
     def move(self, direction):
         if self.mode == WALKING:
+            self.player.move(direction)
             self.tile_matrix.move(direction)  # reverse
             self.tigers.move(direction)  # reverse
             if self.tigers.collide(self.player):  # move to Player obj rect
