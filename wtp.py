@@ -363,8 +363,8 @@ class MessageScreen(object):
         return 'MessageScreen:\n{}'.format(
             '\n'.join([str(m) for m in self.messages]))
 
-    def update(self, mousedown):
-        if mousedown:
+    def update(self, mouse, keys):
+        if any(mouse.get_pressed()) or any(keys):
             self.next_mode_func()
 
     def draw(self, surface):
@@ -537,7 +537,9 @@ class TigerManager(object):
         self.grrr_score = 0
         self.petting_time = PETTING_TIME
 
-    def pet(self, mousedown, mouse_pos):
+    def pet(self, mouse):
+        mousedown = bool(mouse.get_pressed()[0])
+        mouse_pos = mouse.get_pos()
         result = self.process_pet(self.tiger_to_pet, mousedown, mouse_pos)
         if result:
             self.tiger_to_pet.petted = True
@@ -632,7 +634,6 @@ class GameState(object):
         self.player = Player(pos=CENTER_FRAME_POS)
         self.direction_stack = []
         self.direction = None
-        self.mousedown = False
 
     def __str__(self):
         return '''
@@ -643,7 +644,6 @@ class GameState(object):
 
     def reset(self):
         self.direction = None
-        self.mousedown = False
         self.message_screen = None
 
     def help_me(self):
@@ -668,37 +668,16 @@ class GameState(object):
         self.mode = WALKING
         self.reset()
 
-    def add_direction(self, direction):
-        '''
-        Add a pressed direction key on the direction stack.
-        '''
-
-
-        self.direction = self.direction_stack[-1]
-
-    def pop_direction(self, direction):
-        '''
-        Pop a released key from the direction stack.
-        '''
-
-        if self.direction_stack:
-            self.direction = self.direction_stack[-1]
-
-    def process_events(self, events, keys):
+    def process_events(self, events):
         '''
         Assign key and mouse events to self attributes keeping track
         of movements, etc.
         '''
         for event in events:
-            self.keys = keys
             if event.type == pg.QUIT or self.keys[pg.K_ESCAPE]:
                 self.quit()
-
             elif hasattr(event, 'key') and event.key in DIRECTIONS.keys():
                 direction = DIRECTIONS[event.key]
-                # if direction in self.direction_stack:
-                #     self.direction_stack.remove(direction)
-
                 if event.type == pg.KEYDOWN:
                     self.direction_stack.append(direction)
                 if event.type == pg.KEYUP:
@@ -708,11 +687,6 @@ class GameState(object):
                     self.direction = self.direction_stack[-1]
                 else:
                     self.direction = None
-
-            if event.type == pg.MOUSEBUTTONDOWN:
-                self.mousedown = True
-            elif event.type == pg.MOUSEBUTTONUP:
-                self.mousedown = False
 
     def move(self, direction):
         if self.mode == WALKING:
@@ -735,14 +709,14 @@ class GameState(object):
 
     def update(self):
         if self.mode == MESSAGE and self.message_screen:
-            self.message_screen.update(self.mousedown)
+            self.message_screen.update(self.mouse, self.keys)
         if self.mode == WALKING and self.direction:
             self.move(self.direction)
         if self.mode == PETTING:
-            result = self.tigers.pet(self.mousedown, pg.mouse.get_pos())
+            result = self.tigers.pet(self.mouse)
             print('Petting result: {}'.format(result))
             if result:
-                self.mousedown = False  # need a more elegant way of solving this
+                # self.mousedown = False  # need a more elegant way of solving this
                 self.mode = MESSAGE
                 self.message_screen = MessageScreen(
                     PET_FEEDBACK[result],
@@ -768,9 +742,9 @@ def main():
 
     while True:
         FRAME.fill(BLACK)
-        events = pg.event.get()
-        keys = pg.key.get_pressed()
-        game_state.process_events(events, keys)
+        game_state.keys = pg.key.get_pressed()
+        game_state.mouse = pg.mouse
+        game_state.process_events(pg.event.get())
         game_state.update()
         game_state.draw(FRAME)
         pg.display.update()
