@@ -7,16 +7,14 @@ Make TileMatrix to be a iterable?
 tiles referenced by their matrix x/y values?
 
 Tigers on Map
+    Handle if tigers > tiles without center tile
     populate "ROAR" text messages on map for off-screen tigers
     rotate and draw new image for same tiles when repositioning
 
 Tiger Petting
     score per petting round
     total score for game
-    add more tiger pics
     scale picture to frame
     set petting boxes for each tiger individually
-    fix center of pet feedback bar
-    fix "yawn" at bar size = 0
 
 add docstring to every class and function

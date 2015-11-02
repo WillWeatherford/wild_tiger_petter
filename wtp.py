@@ -340,7 +340,7 @@ class ImgObj(pg.sprite.Sprite):
 
     def fill(self, color):
         self.image = pg.Surface((self.width, self.height))
-        self.image.fill(color, rect=self.rect)
+        self.image.fill(color, rect=self.image.get_rect())
 
     def draw(self, surface):
         surface.blit(self.image, self.rect)
@@ -599,7 +599,7 @@ class TigerManager(object):
         self.tigers = [Tiger(pic) for pic in tiger_pics]
         self.pet_text = Text('', DEFAULT_FONT, ORANGE, PET_TEXT_HEIGHT,
                              pos=PET_TEXT_CENTER, alignment=CENTER)
-        self.pet_bar = ImgObj(height=PET_BAR_HEIGHT,
+        self.pet_bar = ImgObj(height=PET_BAR_HEIGHT, width=1,
                               pos=PET_BAR_CENTER, alignment=CENTER)
         self.total_score = 0
         self.reset()
