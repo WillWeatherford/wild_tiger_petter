@@ -2,9 +2,6 @@ also use an "old direction" to help with resetting sprites when movign
 
 pygame.mouse.set_cursor
 set the look of the mouse - hand for petting!
-don't show mouse during walkies
-
-Fix message screen transitions with slight dely between keypresses... or use keyup
 
 Make TileMatrix to be a iterable?
 tiles referenced by their matrix x/y values?
@@ -14,9 +11,12 @@ Tigers on Map
     rotate and draw new image for same tiles when repositioning
 
 Tiger Petting
+    score per petting round
+    total score for game
+    add more tiger pics
     scale picture to frame
     set petting boxes for each tiger individually
     fix center of pet feedback bar
-    fix "yawn" at bar size = 
+    fix "yawn" at bar size = 0
 
 add docstring to every class and function
