@@ -91,9 +91,14 @@ GRRR = 'GRRRRRRRRRRR!'
 
 YAWN_GRRR_MAX = 500
 
-MESSAGE_FONT_HEIGHT = 20
+ROAR_MIN = FPS * 6
+ROAR_MAX = FPS * 12
+
+MESSAGE_FONT_HEIGHT = 25
 MESSAGE_SCREEN_TIME = FPS * 1
 MESSAGE_LINE_SPACING = 20
+ROAR_HEIGHT_FAR = 20
+ROAR_HEIGHT_NEAR = 30
 
 TOPLEFT = 'topleft'
 CENTER = 'center'
@@ -350,6 +355,7 @@ class Text(ImgObj):
     def __init__(self, string, font_name, color, height, *args, **kwargs):
         self.string = string
         self.font_name = font_name
+        self.font_height = height
         self.color = color
         self.font = pg.font.SysFont(font_name, height)
         image = self.font.render(string, True, color)
@@ -358,14 +364,18 @@ class Text(ImgObj):
     def __str__(self):
         return 'Text at {} saying: {}'.format(self.pos, self.string)
 
-    def update(self, pos=OFFSCREEN, string=None, color=None):
+    def update(self, pos=OFFSCREEN, string=None, color=None, height=None):
         if color:
             self.color = color
         if string:
             self.string = string
+        if height:
+            self.font_height = height
+        self.font = pg.font.SysFont(self.font_name, self.font_height)
         self.image = self.font.render(self.string, True, self.color)
         self.rect = self.image.get_rect()
         self.pos = pos
+        print(self)
 
 
 class MessageScreen(object):
@@ -580,14 +590,37 @@ class Tiger(ImgObj):
                                     **kwargs)
         self.picture = ImgObj(image=picture, pos=CENTER_FRAME_POS,
                               alignment=CENTER)
-
+        self.roar = Text('ROAR', DEFAULT_FONT, BLACK, ROAR_HEIGHT_FAR,
+                         alignment=CENTER)
+        self.roar_timer = 0
         self.petted = False
         self.desired_pet_speed = random.randrange(MIN_PET_SPEED, MAX_PET_SPEED)
         self.too_fast = self.desired_pet_speed * TOO_FAST_MOD
         self.too_slow = self.desired_pet_speed * TOO_SLOW_MOD
+        self.roar_min = random.randrange(ROAR_MIN, ROAR_MAX)
+        self.roar_max = random.randrange(self.roar_min, ROAR_MAX)
+
+    def update(self, tile_matrix):
+        x, y = OFFSCREEN
+        self.roar_timer += 1
+        print('Roar timer: {}'.format(self.roar_timer))
+        if self.roar_timer >= self.roar_max:
+            self.roar_timer = 0
+        if self.roar_timer >= self.roar_min:
+            if self.x not in range(FRAME_WIDTH):
+                x = 30  # fix to something more specific
+                y = self.y
+            if self.y not in range(FRAME_HEIGHT):
+                x = self.x
+                y = 30
+        self.roar.update(pos=(x, y))
 
     def draw_picture(self, surface):
         self.picture.draw(surface)
+
+    def draw(self, surface):
+        super(Tiger, self).draw(surface)
+        self.roar.draw(surface)
 
 
 class TigerManager(object):
@@ -684,10 +717,15 @@ class TigerManager(object):
                 return True
         return False
 
+    def update(self, tile_matrix):
+        for tiger in self.tigers_to_pet():
+            tiger.update(tile_matrix)
+
     def move(self, direction):
         direction = mirror_direction(direction)
-        for tiger in self.tigers:
+        for tiger in self.tigers_to_pet():
             tiger.move(direction)
+            tiger.roar.move(direction)
 
     def draw_petting(self, surface):
         self.tiger_to_pet.draw_picture(surface)
@@ -697,6 +735,7 @@ class TigerManager(object):
     def draw(self, surface):
         for tiger in self.tigers_to_pet():
             tiger.draw(surface)
+            tiger.roar.draw(surface)
 
 
 class GameState(object):
@@ -795,6 +834,7 @@ class GameState(object):
         if self.mode == MESSAGE:
             self.message_screen.update(self.keys)
         if self.mode == WALKING:
+            self.tigers.update(self.tile_matrix)
             self.move(self.direction)
         if self.mode == PETTING:
             result = self.tigers.pet(self.mouse)
@@ -820,7 +860,7 @@ class GameState(object):
 def main():
 
     try:
-        size = sys.argv[1]
+        size = int(sys.argv[1])
     except IndexError:
         size = 3
 
