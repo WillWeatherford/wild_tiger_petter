@@ -141,12 +141,11 @@ YAWN_MESSAGES = [
     'Maybe there are more around...'
 ]
 GAME_OVER_MESSAGES = [
-    'Game Over.',
-    'Congratulations!'
+    'Congratulations, you petted all the tigers!',
+    'Press Space to start a new game, or Esc to quit.'
 ]
 CONTINUE_MESSAGES = [
-    'Press "H" at any time for help.',
-    'Press "Space" to continue.'
+    'Press "H" at any time for help. Press "Space" to continue.'
 ]
 
 PET_FEEDBACK = {
@@ -263,6 +262,26 @@ def leading_index(vector, iterable):
 def mirror_direction(direction):
     return tuple(-xy for xy in direction)
 
+
+def cleanup(obj):
+    if obj:
+        for name, attr in obj.__dict__.items():
+            try:
+                attr.cleanup()
+            except AttributeError:
+                pass
+            try:
+                iterable = iter(attr)
+                for item in iterable:
+                    try:
+                        item.cleanup()
+                    except AttributeError:
+                        pass
+            except:
+                TypeError
+            delattr(obj, name)
+    del obj
+
 #######################################################
 
 
@@ -367,6 +386,9 @@ class ImgObj(pg.sprite.Sprite):
             rect = rect.rect
         return self.rect.colliderect(rect)
 
+    def cleanup(self):
+        cleanup(self)
+
     def fill(self, color):
         self.image = pg.Surface((self.width, self.height))
         self.image.fill(color, rect=self.image.get_rect())
@@ -387,6 +409,10 @@ class Text(ImgObj):
 
     def __str__(self):
         return 'Text at {} saying: {}'.format(self.pos, self.string)
+
+    def cleanup(self):
+        super(Text, self).cleanup()
+        del self.font
 
     def update(self, pos=OFFSCREEN, string=None, color=None, height=None):
         if color:
@@ -427,8 +453,10 @@ class MessageScreen(object):
             '\n'.join([str(m) for m in self.messages]))
 
     def update(self, keys):
+        print('MessageScreen update called')
         self.delay -= 1
         if keys[SPACE] and self.delay <= 0:
+            print('{} next mode func triggered'.format(self))
             self.next_mode_func()
 
     def draw(self, surface):
@@ -459,6 +487,9 @@ class Animator(object):
 
     def reset(self):
         self.current_i = -1
+
+    def cleanup(self):
+        cleanup(self)
 
 
 class Player(ImgObj):
@@ -718,11 +749,6 @@ class TigerManager(object):
                                  color=ORANGE)
             self.pet_bar.fill(ORANGE)
 
-        # print('Time: {}; Pet speed: {:.2f} vs {:.2f} Purr: {:.2f}, '
-        #       'Grrr: {:.2f}, Yawn: {:.2f}'.format(
-        #           self.petting_time, pet_speed, tiger.desired_pet_speed,
-        #           self.purr_score, self.grrr_score, self.yawn_score))
-
         if self.petting_time <= 0:
             return PURR
         elif self.yawn_score >= YAWN_MAX:
@@ -770,6 +796,7 @@ class GameState(object):
     Evaluates Pygame key and mouse input and sets game attributes accordingly.
     '''
     def __init__(self, matrix_size):
+        self.matrix_size = matrix_size
         self.mode = MESSAGE
         self.message_screen = MessageScreen(START_MENU_MESSAGES, self.start_game)
         self.tigers = TigerManager()
@@ -779,6 +806,7 @@ class GameState(object):
         self.direction_stack = []
         self.direction = None
         self.total_score = 0
+        self.game_over = False
 
     def __str__(self):
         return '''
@@ -795,11 +823,13 @@ class GameState(object):
         self.mode = MESSAGE
         # need to change this to call back to previous message screen
         # maybe use a "next mode" attribute
+        cleanup(self.message_screen)
         self.message_screen = MessageScreen(HELP_MESSAGES,
                                             self.start_walking)
 
     def start_game(self):
         self.mode = MESSAGE
+        cleanup(self.message_screen)
         self.message_screen = MessageScreen(NEW_GAME_MESSAGES,
                                             self.start_walking)
 
@@ -838,10 +868,11 @@ class GameState(object):
     def move(self, direction):
         self.player.move(direction)
         if direction:
-            self.tile_matrix.move(direction)  # rectverse
-            self.tigers.move(direction)  # reverse
-            if self.tigers.collide(self.player):  # move to Player obj rect
+            self.tile_matrix.move(direction)
+            self.tigers.move(direction)
+            if self.tigers.collide(self.player):
                 self.mode = MESSAGE
+                cleanup(self.message_screen)
                 self.message_screen = MessageScreen(BEFORE_PET_MESSAGES,
                                                     self.start_petting)
 
@@ -862,18 +893,29 @@ class GameState(object):
             self.tigers.update(self.tile_matrix)
             self.move(self.direction)
         if self.mode == PETTING:
-            messages = self.tigers.pet(self.mouse)
-            if messages:
+            result_messages = self.tigers.pet(self.mouse)
+            if result_messages:
                 self.mode = MESSAGE
-                self.message_screen = MessageScreen(messages,
+                cleanup(self.message_screen)
+                self.message_screen = MessageScreen(result_messages,
                                                     self.start_walking)
-        if not self.tigers.tigers_to_pet():
+        if not self.tigers.tigers_to_pet() and not self.game_over:
+            self.game_over = True
             self.mode = MESSAGE
+            cleanup(self.message_screen)
+            messages = list(GAME_OVER_MESSAGES)
+            messages.append('Your final score: {}'.format(self.total_score))
             self.message_screen = MessageScreen(GAME_OVER_MESSAGES,
-                                                self.game_over)
+                                                self.restart)
 
-    def game_over(self):
-        pass
+    def restart(self):
+        print('restarting: cleaning up...')
+        cleanup(self.tigers)
+        cleanup(self.tile_matrix)
+        cleanup(self.player)
+        cleanup(self.message_screen)
+        print('finished cleanup. reinitializing...')
+        self.__init__(self.matrix_size)
 
     def quit(self):
         pg.quit()
@@ -886,8 +928,6 @@ def main():
         size = int(sys.argv[1])
     except IndexError:
         size = 3
-
-    # initialize size from sysargv
 
     game_state = GameState(size)
     print(str(game_state))

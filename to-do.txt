@@ -1,8 +1,5 @@
 
-
 implement Help screen
-
-implement end game screen and restart
 
 faster walking == less frames per second or faster movement speed
 
