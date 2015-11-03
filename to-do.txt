@@ -1,14 +1,19 @@
 
-implement Help screen
+installable!
 
-faster walking == less frames per second or faster movement speed
+implement Help screen with reference back to previous screen
+
+faster walking == more frames per second or faster movement speed
+    more FPS is OK
+    faster walking speed might be OK, but need to reduce animation delay
+        and fix tile redraw calculations
 
 Tigers on Map
     Handle if tigers > tiles without center tile
 
 Tiger Petting
-    total score for game
     set petting boxes for each tiger individually
+
 
 add docstring to every class and function (after HBD)
 

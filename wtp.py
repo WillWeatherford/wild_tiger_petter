@@ -54,10 +54,10 @@ BLUE   = (  0,   0, 255)
 ORANGE = (255, 140,   0)
 YELLOW = (255, 255,   0)
 
-FPS = 30  # frames per second setting
+FPS = 40  # frames per second setting
 fps_clock = pg.time.Clock()
 
-PLAYER_ANIM_RATE = 6
+PLAYER_ANIM_RATE = 8
 
 FRAME_WIDTH, FRAME_HEIGHT = 1280, 720
 SCREEN_RECT = pg.Rect(0, 0, FRAME_WIDTH, FRAME_HEIGHT)
@@ -905,7 +905,7 @@ class GameState(object):
             cleanup(self.message_screen)
             messages = list(GAME_OVER_MESSAGES)
             messages.append('Your final score: {}'.format(self.total_score))
-            self.message_screen = MessageScreen(GAME_OVER_MESSAGES,
+            self.message_screen = MessageScreen(messages,
                                                 self.restart)
 
     def restart(self):
