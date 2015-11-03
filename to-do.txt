@@ -1,3 +1,20 @@
+
+
+implement Help screen
+
+implement end game screen and restart
+
+faster walking == less frames per second or faster movement speed
+
+Tigers on Map
+    Handle if tigers > tiles without center tile
+
+Tiger Petting
+    total score for game
+    set petting boxes for each tiger individually
+
+add docstring to every class and function (after HBD)
+
 also use an "old direction" to help with resetting sprites when movign
 
 pygame.mouse.set_cursor
@@ -5,16 +22,3 @@ set the look of the mouse - hand for petting!
 
 Make TileMatrix to be a iterable?
 tiles referenced by their matrix x/y values?
-
-Tigers on Map
-    Handle if tigers > tiles without center tile
-    populate "ROAR" text messages on map for off-screen tigers
-    rotate and draw new image for same tiles when repositioning
-
-Tiger Petting
-    score per petting round
-    total score for game
-    scale picture to frame
-    set petting boxes for each tiger individually
-
-add docstring to every class and function

@@ -59,11 +59,14 @@ fps_clock = pg.time.Clock()
 
 PLAYER_ANIM_RATE = 6
 
-FRAME_WIDTH, FRAME_HEIGHT = 800, 600
+FRAME_WIDTH, FRAME_HEIGHT = 1280, 720
+SCREEN_RECT = pg.Rect(0, 0, FRAME_WIDTH, FRAME_HEIGHT)
 CENTER_FRAME_X = FRAME_WIDTH / 2
 CENTER_FRAME_Y = FRAME_HEIGHT / 2
 CENTER_FRAME_POS = (CENTER_FRAME_X, CENTER_FRAME_Y)
-FRAME = pg.display.set_mode((FRAME_WIDTH, FRAME_HEIGHT))
+FRAME = pg.display.set_mode((FRAME_WIDTH, FRAME_HEIGHT), pg.FULLSCREEN)
+
+MAX_PICTURE_HEIGHT = int(FRAME_HEIGHT * 0.75)
 
 TILES_PATH = './tiles'
 SPRITES_PATH = './sprites'
@@ -89,7 +92,8 @@ YAWN = 'YAAAWWWNNN...'
 PURR = 'PUUURRRRRRRRR'
 GRRR = 'GRRRRRRRRRRR!'
 
-YAWN_GRRR_MAX = 500
+YAWN_MAX = 1000
+GRRR_MAX = 500
 
 ROAR_MIN = FPS * 6
 ROAR_MAX = FPS * 12
@@ -165,28 +169,42 @@ def load_image(filename):
     return pg.image.load(filename).convert()
 
 
+def random_rotate(surface):
+    return
+
+
 def load_rand_tile():
     filename = random.choice(get_file_paths(TILES_PATH))
-    tile = load_image(filename)
-    return pg.transform.rotate(tile, random.choice(DEGREES))
+    return load_image(filename)
 
 
-# will need to convert this into a general sprite getting function
-def get_tiger_sprite():
+# should convert this into a general sprite getting function
+def load_tiger_sprite():
     filename = os.path.join(SPRITES_PATH, TIGER_SPRITES_FILENAME)
     image = load_image(filename)
     image.set_colorkey(WHITE)
-    subsurface = image.subsurface((0, 0, TIGER_W, TIGER_H))
-    return pg.transform.rotate(subsurface, random.choice(DEGREES))
+    return image.subsurface((0, 0, TIGER_W, TIGER_H))
 
 
-def get_player_images():
+def load_tiger_pics():
+    return [scale_picture(load_image(filename))
+            for filename in get_file_paths(TIGER_PICS_PATH)]
+
+
+def scale_picture(picture):
+    w, h = picture.get_size()
+    h_ratio = float(h) / MAX_PICTURE_HEIGHT
+    new_size = (int(float(w) / h_ratio), int(float(h) / h_ratio))
+    return pg.transform.smoothscale(picture, new_size)
+
+
+def get_player_frames():
     filename = os.path.join(SPRITES_PATH, PLAYER_SPRITES_FILENAME)
     image = load_image(filename)
     image.set_colorkey(WHITE)
-    print([x for x in range(0, image.get_width(), PLAYER_W)])
     return [image.subsurface(x, 0, PLAYER_H, PLAYER_W)
             for x in range(0, image.get_width(), PLAYER_W)]
+
 ##########################################
 # other utils
 
@@ -332,6 +350,12 @@ class ImgObj(pg.sprite.Sprite):
         return (self.x + random.randrange(self.width),
                 self.y + random.randrange(self.height))
 
+    def random_rotate(self):
+        pos = tuple(self.pos)
+        self.image = pg.transform.rotate(self.image, random.choice(DEGREES))
+        self.rect = self.image.get_rect()
+        self.pos = pos
+
     def collidelistall(self, a_list):
         return self.rect.collidelistall(a_list)
 
@@ -375,7 +399,6 @@ class Text(ImgObj):
         self.image = self.font.render(self.string, True, self.color)
         self.rect = self.image.get_rect()
         self.pos = pos
-        print(self)
 
 
 class MessageScreen(object):
@@ -440,7 +463,7 @@ class Animator(object):
 
 class Player(ImgObj):
     def __init__(self, *args, **kwargs):
-        self.frames = get_player_images()
+        self.frames = get_player_frames()
         self.anim_counter = PLAYER_ANIM_RATE - 1
         self.direction = DIRECTIONS[LEFT]
         self.moving_frames = {
@@ -471,19 +494,20 @@ class Tile(ImgObj):
                                    width=TILE_SIZE,
                                    height=TILE_SIZE,
                                    **kwargs)
+        self.random_rotate()
         self.tiger = None
 
     def __str__(self):
         return 'Tile at {}'.format(self.pos)
 
     def place_tiger(self, tiger):
-        # randomly rotate tiger
         self.tiger = tiger
         self.tiger.pos = self.random_pos()
+        self.tiger.random_rotate()
 
     def reposition(self, matrix_pos, tile_pos_in_matrix, direction=(0, 0)):
-        # get new random and rotated image
         self.pos = rel_tile_pos(matrix_pos, tile_pos_in_matrix, direction)
+        self.image = load_rand_tile()
         if self.tiger:
             self.place_tiger(self.tiger)
 
@@ -584,7 +608,7 @@ class TileMatrix(ImgObj):
 class Tiger(ImgObj):
     def __init__(self, picture, *args, **kwargs):
         super(Tiger, self).__init__(*args,
-                                    image=get_tiger_sprite(),
+                                    image=load_tiger_sprite(),
                                     width=TIGER_W,
                                     height=TIGER_H,
                                     **kwargs)
@@ -603,7 +627,6 @@ class Tiger(ImgObj):
     def update(self, tile_matrix):
         x, y = OFFSCREEN
         self.roar_timer += 1
-        print('Roar timer: {}'.format(self.roar_timer))
         if self.roar_timer >= self.roar_max:
             self.roar_timer = 0
         if self.roar_timer >= self.roar_min:
@@ -628,13 +651,12 @@ class TigerManager(object):
     Handles all Tiger objects for both movement on map as well as petting.
     '''
     def __init__(self):
-        tiger_pics = [load_image(pic) for pic in get_file_paths(TIGER_PICS_PATH)]
+        tiger_pics = load_tiger_pics()
         self.tigers = [Tiger(pic) for pic in tiger_pics]
         self.pet_text = Text('', DEFAULT_FONT, ORANGE, PET_TEXT_HEIGHT,
                              pos=PET_TEXT_CENTER, alignment=CENTER)
         self.pet_bar = ImgObj(height=PET_BAR_HEIGHT, width=1,
                               pos=PET_BAR_CENTER, alignment=CENTER)
-        self.total_score = 0
         self.reset()
 
     def __str__(self):
@@ -647,6 +669,7 @@ class TigerManager(object):
         self.purr_score = 0
         self.yawn_score = 0
         self.grrr_score = 0
+        self.total_score = 0
         self.petting_time = PETTING_TIME
 
     def pet(self, mouse):
@@ -654,11 +677,14 @@ class TigerManager(object):
         mouse_pos = mouse.get_pos()
         result = self.process_pet(self.tiger_to_pet, mousedown, mouse_pos)
         if result:
-            self.total_score += self.purr_score
+            messages = list(PET_FEEDBACK[result])
+            messages.append('Petting score: {}'.format(int(self.purr_score)))
             self.tiger_to_pet.petted = True
             self.tiger_to_pet.pos = OFFSCREEN
+            self.total_score += self.purr_score
             self.reset()
-        return result
+            return messages
+        return None
 
     def process_pet(self, tiger, mousedown, mouse_pos):
         self.petting_time -= 1
@@ -687,7 +713,6 @@ class TigerManager(object):
                                  color=YELLOW)
             self.pet_bar.fill(YELLOW)
         else:
-            # the score is higher closer to desired speed
             self.purr_score += 1 / abs(pet_speed - tiger.desired_pet_speed)
             self.pet_text.update(pos=PET_TEXT_CENTER, string=PURR,
                                  color=ORANGE)
@@ -698,12 +723,11 @@ class TigerManager(object):
         #           self.petting_time, pet_speed, tiger.desired_pet_speed,
         #           self.purr_score, self.grrr_score, self.yawn_score))
 
-        # or if tiger gets too bored or too annoyed
         if self.petting_time <= 0:
             return PURR
-        elif self.yawn_score >= YAWN_GRRR_MAX:
+        elif self.yawn_score >= YAWN_MAX:
             return YAWN
-        elif self.grrr_score >= YAWN_GRRR_MAX:
+        elif self.grrr_score >= GRRR_MAX:
             return GRRR
         return None
 
@@ -754,6 +778,7 @@ class GameState(object):
         self.player = Player(pos=tuple(CENTER_FRAME_POS), alignment=CENTER)
         self.direction_stack = []
         self.direction = None
+        self.total_score = 0
 
     def __str__(self):
         return '''
@@ -837,13 +862,11 @@ class GameState(object):
             self.tigers.update(self.tile_matrix)
             self.move(self.direction)
         if self.mode == PETTING:
-            result = self.tigers.pet(self.mouse)
-            print('Petting result: {}'.format(result))
-            if result:
+            messages = self.tigers.pet(self.mouse)
+            if messages:
                 self.mode = MESSAGE
-                self.message_screen = MessageScreen(
-                    PET_FEEDBACK[result],
-                    self.start_walking)
+                self.message_screen = MessageScreen(messages,
+                                                    self.start_walking)
         if not self.tigers.tigers_to_pet():
             self.mode = MESSAGE
             self.message_screen = MessageScreen(GAME_OVER_MESSAGES,
