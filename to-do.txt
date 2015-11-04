@@ -1,7 +1,7 @@
 
-installable!
+executable!
+    installable?
 
-implement Help screen with reference back to previous screen
 
 faster walking == more frames per second or faster movement speed
     more FPS is OK
@@ -17,7 +17,7 @@ Tiger Petting
 
 add docstring to every class and function (after HBD)
 
-also use an "old direction" to help with resetting sprites when movign
+use an "old direction" to help with resetting sprites when movign?
 
 pygame.mouse.set_cursor
 set the look of the mouse - hand for petting!

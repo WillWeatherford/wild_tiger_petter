@@ -8,6 +8,7 @@ pg.init()
 #########################
 # GLOBAL CONSTANTS
 
+HELP = 'help'
 MESSAGE = 'message'
 WALKING = 'walking'
 PETTING = 'petting'
@@ -25,8 +26,8 @@ W = pg.K_w
 A = pg.K_a
 S = pg.K_s
 D = pg.K_d
-
 H = pg.K_h
+
 SPACE = pg.K_SPACE
 
 MOVE_SPEED = 1
@@ -59,12 +60,13 @@ fps_clock = pg.time.Clock()
 
 PLAYER_ANIM_RATE = 8
 
-FRAME_WIDTH, FRAME_HEIGHT = 1280, 720
+# FRAME_WIDTH, FRAME_HEIGHT = 1280, 720
+FRAME_WIDTH, FRAME_HEIGHT = 800, 600
 SCREEN_RECT = pg.Rect(0, 0, FRAME_WIDTH, FRAME_HEIGHT)
 CENTER_FRAME_X = FRAME_WIDTH / 2
 CENTER_FRAME_Y = FRAME_HEIGHT / 2
 CENTER_FRAME_POS = (CENTER_FRAME_X, CENTER_FRAME_Y)
-FRAME = pg.display.set_mode((FRAME_WIDTH, FRAME_HEIGHT), pg.FULLSCREEN)
+FRAME = pg.display.set_mode((FRAME_WIDTH, FRAME_HEIGHT))  # , pg.FULLSCREEN)
 
 MAX_PICTURE_HEIGHT = int(FRAME_HEIGHT * 0.75)
 
@@ -99,7 +101,6 @@ ROAR_MIN = FPS * 6
 ROAR_MAX = FPS * 12
 
 MESSAGE_FONT_HEIGHT = 25
-MESSAGE_SCREEN_TIME = FPS * 1
 MESSAGE_LINE_SPACING = 20
 ROAR_HEIGHT_FAR = 20
 ROAR_HEIGHT_NEAR = 30
@@ -107,7 +108,7 @@ ROAR_HEIGHT_NEAR = 30
 TOPLEFT = 'topleft'
 CENTER = 'center'
 
-MESSAGE_SCREEN_DELAY = 2
+MESSAGE_SCREEN_COOLDOWN = int(FPS * 0.8)
 
 START_MENU_MESSAGES = [
     'Welcome to',
@@ -435,7 +436,7 @@ class MessageScreen(object):
     '''
     def __init__(self, messages, next_mode_func, alignment=CENTER):
         self.next_mode_func = next_mode_func
-        self.delay = MESSAGE_SCREEN_DELAY
+        self.cooldown = MESSAGE_SCREEN_COOLDOWN
 
         if alignment == TOPLEFT:
             x = 100
@@ -453,11 +454,13 @@ class MessageScreen(object):
             '\n'.join([str(m) for m in self.messages]))
 
     def update(self, keys):
-        print('MessageScreen update called')
-        self.delay -= 1
-        if keys[SPACE] and self.delay <= 0:
-            print('{} next mode func triggered'.format(self))
+        self.cooldown -= 1
+        if keys[SPACE] and self.cooldown <= 0:
+            print('{} next mode func triggered: {}'.format(self, self.next_mode_func))
             self.next_mode_func()
+            self.cooldown = MESSAGE_SCREEN_COOLDOWN
+        elif keys[SPACE]:
+            print('Space press ignored at delay {}'.format(self.cooldown))
 
     def draw(self, surface):
         for m in self.messages:
@@ -807,6 +810,7 @@ class GameState(object):
         self.direction = None
         self.total_score = 0
         self.game_over = False
+        self.prev_message_screen = None
 
     def __str__(self):
         return '''
@@ -819,13 +823,36 @@ class GameState(object):
         self.direction = None
         self.message_screen = None
 
-    def help_me(self):
+    def start_prev_message(self):
         self.mode = MESSAGE
-        # need to change this to call back to previous message screen
-        # maybe use a "next mode" attribute
-        cleanup(self.message_screen)
-        self.message_screen = MessageScreen(HELP_MESSAGES,
-                                            self.start_walking)
+        self.message_screen = self.prev_message_screen
+        self.message_screen.cooldown = MESSAGE_SCREEN_COOLDOWN
+        self.prev_message_screen = None
+
+    def help_me(self, prev_mode, prev_message_screen):
+
+        print('Help me called. Prev mode: {}; Prev screen: {}'.format(
+              prev_mode, prev_message_screen))
+
+        # if the previous message still has its button press cooldown on
+        if (prev_message_screen and prev_message_screen.cooldown > 0):
+            print('help_me ignored: prev_message_screen has a cooldown')
+            return
+        # if gamestate has already established a previous message screen;
+        # i.e. if it is already showing a help screen
+        if self.prev_message_screen:
+            print('help_me ignored: alrady have a prev_message_screen set')
+            return
+
+        if prev_mode == MESSAGE:
+            next_func = self.start_prev_message
+        elif prev_mode == WALKING:
+            next_func = self.start_walking
+        elif prev_mode == PETTING:
+            next_func = self.start_petting
+        self.prev_message_screen = prev_message_screen
+        self.mode = MESSAGE
+        self.message_screen = MessageScreen(HELP_MESSAGES, next_func)
 
     def start_game(self):
         self.mode = MESSAGE
@@ -887,7 +914,9 @@ class GameState(object):
             self.tigers.draw_petting(surface)
 
     def update(self):
-        if self.mode == MESSAGE:
+        if self.keys[H]:
+            self.help_me(self.mode, self.message_screen)
+        if self.mode == MESSAGE or self.mode == HELP:
             self.message_screen.update(self.keys)
         if self.mode == WALKING:
             self.tigers.update(self.tile_matrix)
@@ -909,12 +938,10 @@ class GameState(object):
                                                 self.restart)
 
     def restart(self):
-        print('restarting: cleaning up...')
         cleanup(self.tigers)
         cleanup(self.tile_matrix)
         cleanup(self.player)
         cleanup(self.message_screen)
-        print('finished cleanup. reinitializing...')
         self.__init__(self.matrix_size)
 
     def quit(self):
