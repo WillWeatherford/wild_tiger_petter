@@ -950,13 +950,8 @@ class GameState(object):
 
 
 def main():
-
-    try:
-        size = int(sys.argv[1])
-    except IndexError:
-        size = 3
-
-    game_state = GameState(size)
+    print'wtp main() started'
+    game_state = GameState(5)
     print(str(game_state))
 
     while True:
