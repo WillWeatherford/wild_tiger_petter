@@ -13,9 +13,10 @@ Tigers on Map
 
 Tiger Petting
     set petting boxes for each tiger individually
+    More granular feedback mechanism
 
 
-add docstring to every class and function (after HBD)
+add docstring to every class and function
 
 use an "old direction" to help with resetting sprites when movign?
 
@@ -23,4 +24,5 @@ pygame.mouse.set_cursor
 set the look of the mouse - hand for petting!
 
 Make TileMatrix to be a iterable?
-tiles referenced by their matrix x/y values?
+    tiles referenced by their matrix x/y values?
+    use modulo math to easily change matrix pos, instead of list index  

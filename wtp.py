@@ -18,6 +18,8 @@ OFFSCREEN = (-2000, -2000)
 
 DEFAULT_FONT = 'arial'
 
+DEFAULT_TILE_MATRIX_SIZE = 5
+
 UP = pg.K_UP
 DOWN = pg.K_DOWN
 RIGHT = pg.K_RIGHT
@@ -55,8 +57,8 @@ BLUE   = (  0,   0, 255)
 ORANGE = (255, 140,   0)
 YELLOW = (255, 255,   0)
 
-FPS = 40  # frames per second setting
-fps_clock = pg.time.Clock()
+FPS = 30  # frames per second setting
+fps_clock = pg.time.Clock()  # move to main loop
 
 PLAYER_ANIM_RATE = 8
 
@@ -691,6 +693,7 @@ class TigerManager(object):
                              pos=PET_TEXT_CENTER, alignment=CENTER)
         self.pet_bar = ImgObj(height=PET_BAR_HEIGHT, width=1,
                               pos=PET_BAR_CENTER, alignment=CENTER)
+        self.total_score = 0
         self.reset()
 
     def __str__(self):
@@ -703,7 +706,6 @@ class TigerManager(object):
         self.purr_score = 0
         self.yawn_score = 0
         self.grrr_score = 0
-        self.total_score = 0
         self.petting_time = PETTING_TIME
 
     def pet(self, mouse):
@@ -808,7 +810,6 @@ class GameState(object):
         self.player = Player(pos=tuple(CENTER_FRAME_POS), alignment=CENTER)
         self.direction_stack = []
         self.direction = None
-        self.total_score = 0
         self.game_over = False
         self.prev_message_screen = None
 
@@ -933,7 +934,8 @@ class GameState(object):
             self.mode = MESSAGE
             cleanup(self.message_screen)
             messages = list(GAME_OVER_MESSAGES)
-            messages.append('Your final score: {}'.format(self.total_score))
+            messages.append('Your final score: {}'.format(
+                            int(self.tigers.total_score)))
             self.message_screen = MessageScreen(messages,
                                                 self.restart)
 
@@ -951,7 +953,7 @@ class GameState(object):
 
 def main():
     print'wtp main() started'
-    game_state = GameState(5)
+    game_state = GameState(DEFAULT_TILE_MATRIX_SIZE)
     print(str(game_state))
 
     while True:
