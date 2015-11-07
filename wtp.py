@@ -19,6 +19,7 @@ OFFSCREEN = (-2000, -2000)
 DEFAULT_FONT = 'arial'
 
 DEFAULT_TILE_MATRIX_SIZE = 5
+DEFAULT_NUM_TIGERS = 10
 
 UP = pg.K_UP
 DOWN = pg.K_DOWN
@@ -92,6 +93,9 @@ PET_BAR_HEIGHT = 50
 PET_TEXT_HEIGHT = 30
 NUM_PETS = 100
 
+SCORE_COUNTER_POS = (5, 5)
+PETTED_COUNTER_POS = (5, 30)
+
 YAWN = 'YAAAWWWNNN...'
 PURR = 'PUUURRRRRRRRR'
 GRRR = 'GRRRRRRRRRRR!'
@@ -118,7 +122,7 @@ START_MENU_MESSAGES = [
 ]
 HELP_MESSAGES = [
     'Click, hold and drag the mouse button to pet.',
-    'Pet the tiger where it wants to be petted.',
+    # 'Pet the tiger where it wants to be petted.',
     "Don't pet too fast, or the tiger will get angry.",
     "Don't pet too slow, or the tiger will get bored.",
     'Pet the tiger until it is happy!'
@@ -171,10 +175,6 @@ def load_image(filename):
     return pg.image.load(filename).convert()
 
 
-def random_rotate(surface):
-    return
-
-
 def load_rand_tile():
     filename = random.choice(get_file_paths(TILES_PATH))
     return load_image(filename)
@@ -188,9 +188,11 @@ def load_tiger_sprite():
     return image.subsurface((0, 0, TIGER_W, TIGER_H))
 
 
-def load_tiger_pics():
+def load_tiger_pics(num_tigers):
+    paths = get_file_paths(TIGER_PICS_PATH)
+    random.shuffle(paths)
     return [scale_picture(load_image(filename))
-            for filename in get_file_paths(TIGER_PICS_PATH)]
+            for filename in paths[:num_tigers]]
 
 
 def scale_picture(picture):
@@ -583,6 +585,12 @@ class TileMatrix(ImgObj):
             for y in self.index_range])
         return 'Tile Matrix with upperleft at {}\n{}'.format(self.pos, tiles)
 
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        pass
+
     def reposition(self, direction):
         '''
         Repositions all Tiles in the matrix when the center tile moves off of
@@ -686,13 +694,16 @@ class TigerManager(object):
     '''
     Handles all Tiger objects for both movement on map as well as petting.
     '''
-    def __init__(self):
-        tiger_pics = load_tiger_pics()
-        self.tigers = [Tiger(pic) for pic in tiger_pics]
+    def __init__(self, num_tigers):
+        self.tigers = [Tiger(pic) for pic in load_tiger_pics(num_tigers)]
         self.pet_text = Text('', DEFAULT_FONT, ORANGE, PET_TEXT_HEIGHT,
                              pos=PET_TEXT_CENTER, alignment=CENTER)
         self.pet_bar = ImgObj(height=PET_BAR_HEIGHT, width=1,
                               pos=PET_BAR_CENTER, alignment=CENTER)
+        self.score_counter = Text('', DEFAULT_FONT, BLUE, 20,
+                                  pos=SCORE_COUNTER_POS)
+        self.petted_counter = Text('', DEFAULT_FONT, BLUE, 20,
+                                   pos=PETTED_COUNTER_POS)
         self.total_score = 0
         self.reset()
 
@@ -700,6 +711,13 @@ class TigerManager(object):
         return 'Tigers:\n{}'.format('\n'.join(self.tigers))
 
     def reset(self):
+        self.score_counter.update(pos=SCORE_COUNTER_POS,
+                                  string='Total Score: {}'.format(
+                                      int(self.total_score)))
+        self.petted_counter.update(pos=PETTED_COUNTER_POS,
+                                   string='Tigers Petted: {} / {}'.format(
+                                       len(self.tigers) - len(self.tigers_to_pet()),
+                                       len(self.tigers)))
         self.tiger_to_pet = None
         self.last_pet_pos = None
         self.distances = []  # give a better starting list of distances
@@ -791,6 +809,8 @@ class TigerManager(object):
         for tiger in self.tigers_to_pet():
             tiger.draw(surface)
             tiger.roar.draw(surface)
+        self.score_counter.draw(surface)
+        self.petted_counter.draw(surface)
 
 
 class GameState(object):
@@ -800,11 +820,13 @@ class GameState(object):
     Evaluates Pygame events and updates accordingly.
     Evaluates Pygame key and mouse input and sets game attributes accordingly.
     '''
-    def __init__(self, matrix_size):
+    def __init__(self, matrix_size, num_tigers):
         self.matrix_size = matrix_size
+        self.num_tigers = min(((matrix_size ** 2) - 1, num_tigers))
         self.mode = MESSAGE
-        self.message_screen = MessageScreen(START_MENU_MESSAGES, self.start_game)
-        self.tigers = TigerManager()
+        self.message_screen = MessageScreen(START_MENU_MESSAGES,
+                                            self.start_game)
+        self.tigers = TigerManager(self.num_tigers)
         self.tile_matrix = TileMatrix(matrix_size, self.tigers.tigers_to_pet(),
                                       pos=init_matrix_pos(matrix_size))
         self.player = Player(pos=tuple(CENTER_FRAME_POS), alignment=CENTER)
@@ -815,10 +837,14 @@ class GameState(object):
 
     def __str__(self):
         return '''
-        GameState current mode: {}
+        GameState
+        current mode: {}
+        matrix size: {}
+        num tigers: {}
         {}
         {}
-        '''.format(self.mode, self.tile_matrix, self.message_screen)
+        '''.format(self.mode, self.matrix_size, self.num_tigers,
+                   self.tile_matrix, self.message_screen)
 
     def reset(self):
         self.direction = None
@@ -953,7 +979,7 @@ class GameState(object):
 
 def main():
     print'wtp main() started'
-    game_state = GameState(DEFAULT_TILE_MATRIX_SIZE)
+    game_state = GameState(DEFAULT_TILE_MATRIX_SIZE, DEFAULT_NUM_TIGERS)
     print(str(game_state))
 
     while True:

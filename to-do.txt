@@ -2,19 +2,13 @@
 executable!
     installable?
 
-
-faster walking == more frames per second or faster movement speed
-    more FPS is OK
-    faster walking speed might be OK, but need to reduce animation delay
-        and fix tile redraw calculations
-
 Tigers on Map
-    Handle if tigers > tiles without center tile
+    user set number of tigers
+    different roar size depending on distance
 
 Tiger Petting
     set petting boxes for each tiger individually
     More granular feedback mechanism
-
 
 add docstring to every class and function
 
@@ -26,3 +20,8 @@ set the look of the mouse - hand for petting!
 Make TileMatrix to be a iterable?
     tiles referenced by their matrix x/y values?
     use modulo math to easily change matrix pos, instead of list index  
+
+faster walking == more frames per second or faster movement speed
+    more FPS is not OK on other computers
+    faster walking speed might be OK, but need to reduce animation delay
+        and fix tile redraw calculations
