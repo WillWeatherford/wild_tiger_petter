@@ -8,19 +8,45 @@ pg.init()
 #########################
 # GLOBAL CONSTANTS
 
+FPS = 30  # frames per second setting
+
+# FRAME_WIDTH, FRAME_HEIGHT = 1280, 720
+FRAME_WIDTH, FRAME_HEIGHT = 800, 600
+SCREEN_RECT = pg.Rect(0, 0, FRAME_WIDTH, FRAME_HEIGHT)
+CENTER_FRAME_X = FRAME_WIDTH / 2
+CENTER_FRAME_Y = FRAME_HEIGHT / 2
+CENTER_FRAME_POS = (CENTER_FRAME_X, CENTER_FRAME_Y)
+FRAME = pg.display.set_mode((FRAME_WIDTH, FRAME_HEIGHT))  # , pg.FULLSCREEN)
+
+OFFSCREEN = (-2000, -2000)
+TOPLEFT = 'topleft'
+CENTER = 'center'
+
+DEFAULT_FONT = 'arial'
+
+BLACK  = (  0,   0,   0)
+WHITE  = (255, 255, 255)
+RED    = (255,   0,   0)
+GREEN  = (  0, 255,   0)
+BLUE   = (  0,   0, 255)
+ORANGE = (255, 140,   0)
+YELLOW = (255, 255,   0)
+
+#########################
+#   GameState Constants
+
+# Modes
 HELP = 'help'
 MESSAGE = 'message'
 WALKING = 'walking'
 PETTING = 'petting'
 GAME_OVER = 'game over'
 
-OFFSCREEN = (-2000, -2000)
-
-DEFAULT_FONT = 'arial'
-
+MOVE_SPEED = 1
 DEFAULT_TILE_MATRIX_SIZE = 5
 DEFAULT_NUM_TIGERS = 10
 
+SPACE = pg.K_SPACE
 UP = pg.K_UP
 DOWN = pg.K_DOWN
 RIGHT = pg.K_RIGHT
@@ -31,9 +57,6 @@ S = pg.K_s
 D = pg.K_d
 H = pg.K_h
 
-SPACE = pg.K_SPACE
-
-MOVE_SPEED = 1
 DIRECTIONS = {LEFT: (-MOVE_SPEED, 0),
               UP: (0, -MOVE_SPEED),
               RIGHT: (MOVE_SPEED, 0),
@@ -50,28 +73,7 @@ DI_DE = {DIRECTIONS[LEFT]: 0.0,
          DIRECTIONS[RIGHT]: 180.0,
          DIRECTIONS[DOWN]: 90.0}
 
-BLACK  = (  0,   0,   0)
-WHITE  = (255, 255, 255)
-RED    = (255,   0,   0)
-GREEN  = (  0, 255,   0)
-BLUE   = (  0,   0, 255)
-ORANGE = (255, 140,   0)
-YELLOW = (255, 255,   0)
-
-FPS = 30  # frames per second setting
-fps_clock = pg.time.Clock()  # move to main loop
-
 PLAYER_ANIM_RATE = 8
-
-# FRAME_WIDTH, FRAME_HEIGHT = 1280, 720
-FRAME_WIDTH, FRAME_HEIGHT = 800, 600
-SCREEN_RECT = pg.Rect(0, 0, FRAME_WIDTH, FRAME_HEIGHT)
-CENTER_FRAME_X = FRAME_WIDTH / 2
-CENTER_FRAME_Y = FRAME_HEIGHT / 2
-CENTER_FRAME_POS = (CENTER_FRAME_X, CENTER_FRAME_Y)
-FRAME = pg.display.set_mode((FRAME_WIDTH, FRAME_HEIGHT))  # , pg.FULLSCREEN)
-
-MAX_PICTURE_HEIGHT = int(FRAME_HEIGHT * 0.75)
 
 TILES_PATH = './tiles'
 SPRITES_PATH = './sprites'
@@ -83,18 +85,23 @@ TILE_SIZE = 200
 TIGER_W, TIGER_H = 19, 51
 PLAYER_H, PLAYER_W = 20, 20
 
+SCORE_COUNTER_POS = (5, 5)
+PETTED_COUNTER_POS = (5, 30)
+
+######################################
+# Tiger Petting constants
+
+MAX_PICTURE_HEIGHT = int(FRAME_HEIGHT * 0.75)
+
 MIN_PET_SPEED, MAX_PET_SPEED = 5, 10
 TOO_FAST_MOD, TOO_SLOW_MOD = 1.4, 0.8
 PETTING_TIME = FPS * 20
 PET_BAR_MOD = 60
+PET_BAR_HEIGHT = 50
 PET_BAR_CENTER = (CENTER_FRAME_X, 20)
 PET_TEXT_CENTER = (CENTER_FRAME_X, 60)
-PET_BAR_HEIGHT = 50
 PET_TEXT_HEIGHT = 30
 NUM_PETS = 100
-
-SCORE_COUNTER_POS = (5, 5)
-PETTED_COUNTER_POS = (5, 30)
 
 YAWN = 'YAAAWWWNNN...'
 PURR = 'PUUURRRRRRRRR'
@@ -105,16 +112,16 @@ GRRR_MAX = 500
 
 ROAR_MIN = FPS * 6
 ROAR_MAX = FPS * 12
-
-MESSAGE_FONT_HEIGHT = 25
-MESSAGE_LINE_SPACING = 20
 ROAR_HEIGHT_FAR = 20
 ROAR_HEIGHT_NEAR = 30
 
-TOPLEFT = 'topleft'
-CENTER = 'center'
+
+##############################################
+# Message Screens constants
 
 MESSAGE_SCREEN_COOLDOWN = int(FPS * 0.8)
+MESSAGE_FONT_HEIGHT = 25
+MESSAGE_LINE_SPACING = 20
 
 START_MENU_MESSAGES = [
     'Welcome to',
@@ -160,6 +167,7 @@ PET_FEEDBACK = {
     YAWN: YAWN_MESSAGES,
     GRRR: GRRR_MESSAGES
 }
+
 #############################
 
 
@@ -209,6 +217,7 @@ def get_player_frames():
     return [image.subsurface(x, 0, PLAYER_H, PLAYER_W)
             for x in range(0, image.get_width(), PLAYER_W)]
 
+
 ##########################################
 # other utils
 
@@ -232,24 +241,6 @@ def distance(pos1, pos2):
         return 0
 
 
-def distances(pos_list):
-    if len(pos_list) < 2:
-        return []
-    return [distance(pos, pos_list[i - 1]) for i, pos in enumerate(pos_list[1:])]
-
-
-def total_distance(pos_list, total=0):
-    if len(pos_list) < 2:
-        return total
-    else:
-        total += distance(pos_list[0], pos_list[1])
-        return total_distance(pos_list[1:], total)
-
-
-def avg_distance(pos_list):
-    return total_distance(pos_list) / len(pos_list)
-
-
 def trailing_index(vector):
     if vector < 0:
         return -1
@@ -265,10 +256,18 @@ def leading_index(vector, iterable):
 
 
 def mirror_direction(direction):
+    '''
+    Reverses the direction for the purpose of moving the gameworld across the
+    screen in the opposite direction that the player is going.
+    '''
     return tuple(-xy for xy in direction)
 
 
 def cleanup(obj):
+    '''
+    Deletes all game objects and their attributes when ending a game and
+    starting a new game.
+    '''
     if obj:
         for name, attr in obj.__dict__.items():
             try:
@@ -291,6 +290,10 @@ def cleanup(obj):
 
 
 class ImgObj(pg.sprite.Sprite):
+    '''
+    This is the parent class for game objects which are rectangular, can
+    move around in the world, and have other useful properties.
+    '''
     def __init__(self, pos=OFFSCREEN, image=None,
                  width=0, height=0, alignment=TOPLEFT):
         pg.sprite.Sprite.__init__(self)
@@ -403,6 +406,9 @@ class ImgObj(pg.sprite.Sprite):
 
 
 class Text(ImgObj):
+    '''
+    All text objects to be rendered in the game.
+    '''
     def __init__(self, string, font_name, color, height, *args, **kwargs):
         self.string = string
         self.font_name = font_name
@@ -500,6 +506,9 @@ class Animator(object):
 
 
 class Player(ImgObj):
+    '''
+    The player sprite object existing at the cente of the screen.
+    '''
     def __init__(self, *args, **kwargs):
         self.frames = get_player_frames()
         self.anim_counter = PLAYER_ANIM_RATE - 1
@@ -524,6 +533,10 @@ class Player(ImgObj):
 
 
 class Tile(ImgObj):
+    '''
+    Jungle tile making up the map of the world. It is randomly selected and
+    rotated.
+    '''
     def __init__(self, matrix_pos, tile_pos_in_matrix, *args, **kwargs):
         pos = rel_tile_pos(matrix_pos, tile_pos_in_matrix)
         super(Tile, self).__init__(*args,
@@ -978,6 +991,7 @@ class GameState(object):
 
 
 def main():
+    fps_clock = pg.time.Clock()
     print'wtp main() started'
     game_state = GameState(DEFAULT_TILE_MATRIX_SIZE, DEFAULT_NUM_TIGERS)
     print(str(game_state))

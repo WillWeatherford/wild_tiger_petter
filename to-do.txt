@@ -12,8 +12,6 @@ Tiger Petting
 
 add docstring to every class and function
 
-use an "old direction" to help with resetting sprites when movign?
-
 pygame.mouse.set_cursor
 set the look of the mouse - hand for petting!
 
