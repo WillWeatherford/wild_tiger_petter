@@ -35,16 +35,16 @@ YELLOW = (255, 255,   0)
 #########################
 #   GameState Constants
 
+MOVE_SPEED = 1
+DEFAULT_TILE_MATRIX_SIZE = 5
+DEFAULT_NUM_TIGERS = 10
+
 # Modes
 HELP = 'help'
 MESSAGE = 'message'
 WALKING = 'walking'
 PETTING = 'petting'
 GAME_OVER = 'game over'
-
-MOVE_SPEED = 1
-DEFAULT_TILE_MATRIX_SIZE = 5
-DEFAULT_NUM_TIGERS = 10
 
 SPACE = pg.K_SPACE
 UP = pg.K_UP
@@ -241,18 +241,18 @@ def distance(pos1, pos2):
         return 0
 
 
-def trailing_index(vector):
-    if vector < 0:
-        return -1
-    elif vector > 0:
-        return 0
+# def trailing_index(vector):
+#     if vector < 0:
+#         return -1
+#     elif vector > 0:
+#         return 0
 
 
-def leading_index(vector, iterable):
-    if vector < 0:
-        return 0
-    elif vector > 0:
-        return len(iterable) - 1
+# def leading_index(vector, iterable):
+#     if vector < 0:
+#         return 0
+#     elif vector > 0:
+#         return len(iterable) - 1
 
 
 def mirror_direction(direction):
@@ -538,6 +538,7 @@ class Tile(ImgObj):
     rotated.
     '''
     def __init__(self, matrix_pos, tile_pos_in_matrix, *args, **kwargs):
+        self.pos_in_matrix = tile_pos_in_matrix
         pos = rel_tile_pos(matrix_pos, tile_pos_in_matrix)
         super(Tile, self).__init__(*args,
                                    pos=pos,
@@ -549,21 +550,22 @@ class Tile(ImgObj):
         self.tiger = None
 
     def __str__(self):
-        return 'Tile at {}'.format(self.pos)
+        return 'Tile {} at {}'.format(self.pos_in_matrix, self.pos)
 
     def place_tiger(self, tiger):
         self.tiger = tiger
         self.tiger.pos = self.random_pos()
         self.tiger.random_rotate()
 
-    def reposition(self, matrix_pos, tile_pos_in_matrix, direction=(0, 0)):
-        self.pos = rel_tile_pos(matrix_pos, tile_pos_in_matrix, direction)
-        self.image = load_rand_tile()
-        if self.tiger:
-            self.place_tiger(self.tiger)
+    def reposition(self, matrix_pos, direction=(0, 0), shuffle=False):
+        self.pos = rel_tile_pos(matrix_pos, self.pos_in_matrix, direction)
+        if shuffle:
+            print('shuffle {}'.format(shuffle))
+            self.image = load_rand_tile()
+            if self.tiger:
+                self.place_tiger(self.tiger)
 
 
-# make TileMatrix into an iterable class
 class TileMatrix(ImgObj):
     def __init__(self, size, tigers, *args, **kwargs):
         super(TileMatrix, self).__init__(*args,
@@ -575,12 +577,12 @@ class TileMatrix(ImgObj):
         self.size = int(size)
         self.index_range = range(size)
         self.center_index = size / 2
-        self.tiles = [[Tile(self.pos, (matrix_x, matrix_y))
-                       for matrix_y in self.index_range]
-                      for matrix_x in self.index_range]
+        self.tiles = set([Tile(self.pos, (matrix_x, matrix_y))
+                          for matrix_y in self.index_range
+                          for matrix_x in self.index_range])
         self.update_pos()
 
-        tiles = list(self.get_matrix())
+        tiles = list(self.tiles)
         random.shuffle(tiles)
 
         for tile in tiles:
@@ -593,72 +595,49 @@ class TileMatrix(ImgObj):
 
     def __str__(self):
         tiles = '\n'.join([' | '.join(
-            ['({}, {}): {}'.format(x, y, str(self.tiles[x][y]))
+            ['{}'.format(str(self.get_tile((x, y))))
              for x in self.index_range])
             for y in self.index_range])
         return 'Tile Matrix with upperleft at {}\n{}'.format(self.pos, tiles)
-
-    def __iter__(self):
-        return self
-
-    def __next__(self):
-        pass
 
     def reposition(self, direction):
         '''
         Repositions all Tiles in the matrix when the center tile moves off of
         the center point where the player is.
-        Overwrites tiles on the trailing edge. Creates new tiles on the leading
-        edge.
         This creates the illusion of a constant unending map.
         '''
-        # dx and dy track the individual x and y movement vectors
-        dx, dy = direction
-        # remember: direction of map movement is reversed compared to
-        # arrow direction (player direction)
-
-        if dx:
-            tiles_to_move = self.tiles.pop(trailing_index(dx))
-            random.shuffle(tiles_to_move)
-            x = leading_index(dx, tiles_to_move)
-            self.tiles.insert(x, tiles_to_move)
-            for y, tile in enumerate(tiles_to_move):
-                tile.reposition(self.pos, (x, y), direction)
-        elif dy:
-            tiles_to_move = [x.pop(trailing_index(dy)) for x in self.tiles]
-            random.shuffle(tiles_to_move)
-            for x, tile in enumerate(tiles_to_move):
-                y = leading_index(dy, tiles_to_move)
-                self.tiles[x].insert(y, tile)
-                tile.reposition(self.pos, (x, y), direction)
-        print(self)
+        for tile in self.tiles:
+            tile.pos_in_matrix = tuple(map(lambda txy, dxy:
+                                       (txy - dxy) % self.size,
+                                       tile.pos_in_matrix, direction))
+            shuffle = any(map(lambda txy, dxy:
+                          (txy, dxy) == (0, -1) or (txy, dxy) == (self.size - 1, 1),
+                          tile.pos_in_matrix, direction))
+            tile.reposition(self.pos, direction, shuffle)
         self.update_pos()
 
-    def get_matrix(self):
-        for row in self.tiles:
-            for tile in row:
-                yield tile
-
-    def update_pos(self, direction=(0, 0)):
-        # use direction ?
-        self.center_tile = self.tiles[self.center_index][self.center_index]
+    def update_pos(self):
+        self.center_tile = self.get_tile((self.center_index, self.center_index))
         print('Update pos: Center tile: {}'.format(self.center_tile))
-        self.pos = self.tiles[0][0].topleft
+        self.pos = self.get_tile((0, 0)).topleft
         print('Update pos: tile_matrix.pos: {}'.format(self.pos))
+
+    def get_tile(self, pos_in_matrix):
+        return filter(lambda t: t.pos_in_matrix == pos_in_matrix, self.tiles)[0]
 
     def off_center(self):
         return not self.center_tile.collide_pos(CENTER_FRAME_POS)
 
     def move(self, direction):
         super(TileMatrix, self).move(mirror_direction(direction))
-        for tile in self.get_matrix():
+        for tile in self.tiles:
             tile.move(mirror_direction(direction))
         if self.off_center():
             print('Tile off center; redrawing.')
             self.reposition(direction)
 
     def draw(self, surface):
-        for tile in self.get_matrix():
+        for tile in self.tiles:
             tile.draw(surface)
 
 

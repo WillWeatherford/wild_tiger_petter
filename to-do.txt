@@ -2,6 +2,8 @@
 executable!
     installable?
 
+pre-load images cache
+
 Tigers on Map
     user set number of tigers
     different roar size depending on distance
