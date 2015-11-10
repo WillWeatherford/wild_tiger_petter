@@ -2,24 +2,14 @@
 executable!
     installable?
 
-pre-load images cache
-
 Tigers on Map
     user set number of tigers
-    different roar size depending on distance
 
 Tiger Petting
     set petting boxes for each tiger individually
     More granular feedback mechanism
 
 add docstring to every class and function
-
-pygame.mouse.set_cursor
-set the look of the mouse - hand for petting!
-
-Make TileMatrix to be a iterable?
-    tiles referenced by their matrix x/y values?
-    use modulo math to easily change matrix pos, instead of list index  
 
 faster walking == more frames per second or faster movement speed
     more FPS is not OK on other computers

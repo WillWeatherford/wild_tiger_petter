@@ -114,7 +114,7 @@ ROAR_MIN = FPS * 6
 ROAR_MAX = FPS * 12
 ROAR_HEIGHT_FAR = 20
 ROAR_HEIGHT_NEAR = 30
-
+ROAR_DISTANCE = TILE_SIZE * 3
 
 ##############################################
 # Message Screens constants
@@ -239,20 +239,6 @@ def distance(pos1, pos2):
         return math.hypot(x_delt, y_delt)
     except:
         return 0
-
-
-# def trailing_index(vector):
-#     if vector < 0:
-#         return -1
-#     elif vector > 0:
-#         return 0
-
-
-# def leading_index(vector, iterable):
-#     if vector < 0:
-#         return 0
-#     elif vector > 0:
-#         return len(iterable) - 1
 
 
 def mirror_direction(direction):
@@ -650,7 +636,7 @@ class Tiger(ImgObj):
                                     **kwargs)
         self.picture = ImgObj(image=picture, pos=CENTER_FRAME_POS,
                               alignment=CENTER)
-        self.roar = Text('ROAR', DEFAULT_FONT, BLACK, ROAR_HEIGHT_FAR,
+        self.roar = Text('ROAR', DEFAULT_FONT, BLACK, ROAR_HEIGHT_NEAR,
                          alignment=CENTER)
         self.roar_timer = 0
         self.petted = False
@@ -672,7 +658,11 @@ class Tiger(ImgObj):
             if self.y not in range(FRAME_HEIGHT):
                 x = self.x
                 y = 30
-        self.roar.update(pos=(x, y))
+        if distance(self.pos, CENTER_FRAME_POS) > ROAR_DISTANCE:
+            height = ROAR_HEIGHT_FAR
+        else:
+            height = ROAR_HEIGHT_NEAR
+        self.roar.update(pos=(x, y), height=height)
 
     def draw_picture(self, surface):
         self.picture.draw(surface)
@@ -719,21 +709,16 @@ class TigerManager(object):
         self.petting_time = PETTING_TIME
 
     def pet(self, mouse):
-        mousedown = bool(mouse.get_pressed()[0])
-        mouse_pos = mouse.get_pos()
-        result = self.process_pet(self.tiger_to_pet, mousedown, mouse_pos)
-        if result:
-            messages = list(PET_FEEDBACK[result])
-            messages.append('Petting score: {}'.format(int(self.purr_score)))
-            self.tiger_to_pet.petted = True
-            self.tiger_to_pet.pos = OFFSCREEN
-            self.total_score += self.purr_score
-            self.reset()
-            return messages
-        return None
-
-    def process_pet(self, tiger, mousedown, mouse_pos):
+        '''
+        Processes all aspects of petting mode: speed of petting, reaction
+        of tiger, visual feedback of reaction, and exiting pet mode when
+        resolved.
+        '''
+        result = None
         self.petting_time -= 1
+        mouse_pos = mouse.get_pos()
+        mousedown = bool(mouse.get_pressed()[0])
+
         if mousedown:
             dist = distance(self.last_pet_pos, mouse_pos)
             self.last_pet_pos = mouse_pos
@@ -749,27 +734,35 @@ class TigerManager(object):
         self.pet_bar.width = pet_speed * PET_BAR_MOD
         self.pet_bar.pos = PET_BAR_CENTER
 
-        if pet_speed >= tiger.too_fast:
-            self.grrr_score += abs(pet_speed - tiger.too_fast)
+        if pet_speed >= self.tiger_to_pet.too_fast:
+            self.grrr_score += abs(pet_speed - self.tiger_to_pet.too_fast)
             self.pet_text.update(pos=PET_TEXT_CENTER, string=GRRR, color=RED)
             self.pet_bar.fill(RED)
-        elif pet_speed <= tiger.too_slow:
-            self.yawn_score += abs(pet_speed - tiger.too_slow)
+        elif pet_speed <= self.tiger_to_pet.too_slow:
+            self.yawn_score += abs(pet_speed - self.tiger_to_pet.too_slow)
             self.pet_text.update(pos=PET_TEXT_CENTER, string=YAWN,
                                  color=YELLOW)
             self.pet_bar.fill(YELLOW)
         else:
-            self.purr_score += 1 / abs(pet_speed - tiger.desired_pet_speed)
+            self.purr_score += 1 / abs(pet_speed - self.tiger_to_pet.desired_pet_speed)
             self.pet_text.update(pos=PET_TEXT_CENTER, string=PURR,
                                  color=ORANGE)
             self.pet_bar.fill(ORANGE)
 
         if self.petting_time <= 0:
-            return PURR
+            result = PURR
         elif self.yawn_score >= YAWN_MAX:
-            return YAWN
+            result = YAWN
         elif self.grrr_score >= GRRR_MAX:
-            return GRRR
+            result = GRRR
+        if result:
+            messages = list(PET_FEEDBACK[result])
+            messages.append('Petting score: {}'.format(int(self.purr_score)))
+            self.tiger_to_pet.petted = True
+            self.tiger_to_pet.pos = OFFSCREEN
+            self.total_score += self.purr_score
+            self.reset()
+            return messages
         return None
 
     def tigers_to_pet(self):
@@ -970,8 +963,8 @@ class GameState(object):
 
 
 def main():
-    fps_clock = pg.time.Clock()
     print'wtp main() started'
+    fps_clock = pg.time.Clock()
     game_state = GameState(DEFAULT_TILE_MATRIX_SIZE, DEFAULT_NUM_TIGERS)
     print(str(game_state))
 
